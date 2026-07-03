@@ -46,7 +46,7 @@ export const Canvas: React.FC = () => {
 
   // --- NEW: Coordinate Math Helper ---
   // This calculates exact canvas pixels regardless of zoom or pan!
-  const getCoordinates = (e: React.MouseEvent) => {
+  const getCoordinates = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
@@ -177,7 +177,7 @@ export const Canvas: React.FC = () => {
   }, [elements, currentElement, remoteElements, canvasSize]);
 
   // --- UPDATED: Mouse Handlers ---
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.PointerEvent) => {
     // Check if using Hand tool OR Middle Mouse Button (button 1)
     if (currentTool === "hand" || e.button === 1) {
       setIsPanning(true);
@@ -205,7 +205,7 @@ export const Canvas: React.FC = () => {
     socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handleMouseMove = (e: React.PointerEvent) => {
     // Handle Panning
     if (isPanning) {
       const dx = e.clientX - startPan.x;
@@ -294,10 +294,10 @@ export const Canvas: React.FC = () => {
         // Change these two lines:
         width={canvasSize.width}
         height={canvasSize.height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onPointerDown={handleMouseDown}
+        onPointerMove={handleMouseMove}
+        onPointerUp={handleMouseUp}
+        onPointerOut={handleMouseUp}
         className={`${currentTool === "hand" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"} touch-none block`}
       />
     </div>

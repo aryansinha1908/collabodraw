@@ -144,6 +144,28 @@ export const BoardPage = () => {
     setIsExportMenuOpen(false);
   };
 
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Ctrl (Windows) or Cmd (Mac)
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          undo(socket.id as string);
+          socket.emit("undo", { roomId, userId: socket.id });
+        } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
+          // Supports Ctrl+Y and Ctrl+Shift+Z
+          e.preventDefault();
+          redo();
+          socket.emit("redo", roomId);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [roomId, undo, redo]); // Make sure you added 'undo' and 'redo' to your destructuring from useBoardStore!
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-gray-900 font-sans">
       {/* Menu Toggle Button */}
