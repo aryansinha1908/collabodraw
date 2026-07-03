@@ -29,15 +29,29 @@ function App() {
   } = useBoardStore();
 
   useEffect(() => {
-    // 1. Join the room on mount
+    // 1. Join the room on initial mount
     socket.emit("join-room", ROOM_ID);
 
-    // 2. Listen for global persistent events
+    // --- FIX: Re-join the room if the network drops and reconnects ---
+    const handleReconnect = () => {
+      console.log("Socket reconnected, rejoining room...");
+      socket.emit("join-room", ROOM_ID);
+    };
+    socket.on("connect", handleReconnect);
+
+    // 2. Load the saved board state from MongoDB
+    socket.on("board-state", (loadedElements) => {
+      useBoardStore.getState().setElements(loadedElements, false);
+    });
+
+    // 3. Listen for global persistent events
     socket.on("undo", remoteUndo);
     socket.on("redo", remoteRedo);
     socket.on("clear-board", remoteClear);
 
     return () => {
+      socket.off("connect", handleReconnect); // Clean up the reconnect listener
+      socket.off("board-state");
       socket.off("undo");
       socket.off("redo");
       socket.off("clear-board");

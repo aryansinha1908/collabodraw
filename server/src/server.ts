@@ -3,6 +3,8 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
+import { Board } from "./models";
 
 dotenv.config();
 
@@ -19,27 +21,42 @@ const io = new Server(server, {
   },
 });
 
-// A simple in-memory store for active users per room (Transient State)
+// Connect to MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI as string)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.error("MongoDB connection error:", err));
+
 const roomUsers = new Map<string, Set<string>>();
 
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on("join-room", (roomId: string) => {
+  socket.on("join-room", async (roomId: string) => {
     socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
 
-    // Track users in room
     if (!roomUsers.has(roomId)) {
       roomUsers.set(roomId, new Set());
     }
     roomUsers.get(roomId)?.add(socket.id);
 
-    // Let others know a new user joined
+    // --- HYDRATION: Fetch board from DB and send to the user who just joined ---
+    try {
+      let board = await Board.findOne({ boardId: roomId });
+      if (!board) {
+        // Create the board if it doesn't exist yet
+        board = await Board.create({ boardId: roomId, elements: [] });
+      }
+      // Send the saved elements strictly to the user who joined
+      socket.emit("board-state", board.elements);
+    } catch (error) {
+      console.error("Error fetching board state:", error);
+    }
+
     socket.to(roomId).emit("user-joined", socket.id);
   });
 
-  // --- Transient Events (Previews & Cursors) ---
+  // --- Transient Events (Unchanged) ---
   socket.on("cursor-move", ({ roomId, x, y }) => {
     socket.to(roomId).emit("cursor-move", { userId: socket.id, x, y });
   });
@@ -52,27 +69,55 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("draw-move", { userId: socket.id, element });
   });
 
-  // --- Persistent Events (Finalized board state, will be saved to DB in Phase 3) ---
-  socket.on("draw-end", ({ roomId, element }) => {
+  // --- Persistent Events (Now saving to MongoDB) ---
+  socket.on("draw-end", async ({ roomId, element }) => {
     socket.to(roomId).emit("draw-end", element);
+    try {
+      // Push the new element to the board's elements array
+      await Board.findOneAndUpdate(
+        { boardId: roomId },
+        { $push: { elements: element } },
+        { upsert: true },
+      );
+    } catch (error) {
+      console.error("Failed to save element:", error);
+    }
   });
 
-  socket.on("undo", (roomId: string) => {
+  socket.on("clear-board", async (roomId: string) => {
+    socket.to(roomId).emit("clear-board");
+    try {
+      // Wipe the elements array in the DB
+      await Board.findOneAndUpdate(
+        { boardId: roomId },
+        { $set: { elements: [] } },
+      );
+    } catch (error) {
+      console.error("Failed to clear board in DB:", error);
+    }
+  });
+
+  socket.on("undo", async (roomId: string) => {
     socket.to(roomId).emit("undo");
+    try {
+      // Remove the very last element from the DB array (Global Undo)
+      await Board.findOneAndUpdate(
+        { boardId: roomId },
+        { $pop: { elements: 1 } },
+      );
+    } catch (error) {
+      console.error("Failed to undo in DB:", error);
+    }
   });
 
   socket.on("redo", (roomId: string) => {
     socket.to(roomId).emit("redo");
-  });
-
-  socket.on("clear-board", (roomId: string) => {
-    socket.to(roomId).emit("clear-board");
+    // Note for Hackathon: Redo persistence requires storing the redo stack in DB
+    // or rewriting the whole array. For speed, we just broadcast it for now.
   });
 
   socket.on("disconnect", () => {
     console.log(`User disconnected: ${socket.id}`);
-
-    // Remove user from rooms and notify others
     roomUsers.forEach((users, roomId) => {
       if (users.has(socket.id)) {
         users.delete(socket.id);
@@ -85,5 +130,5 @@ io.on("connection", (socket) => {
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT} 🚀`);
+  console.log(`Server is running on port ${PORT}`);
 });
