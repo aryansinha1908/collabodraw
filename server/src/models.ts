@@ -37,3 +37,14 @@ const BoardSchema = new mongoose.Schema(
 );
 
 export const Board = mongoose.model("Board", BoardSchema);
+
+const UserSchema = new mongoose.Schema(
+  {
+    username: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true },
+  },
+  { timestamps: true },
+);
+
+export const User = mongoose.model("User", UserSchema);

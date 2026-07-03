@@ -5,12 +5,16 @@ import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Board } from "./models";
+import jwt from "jsonwebtoken";
+import { authRouter } from "./routes/auth";
 
 dotenv.config();
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
 app.use(express.json());
+
+app.use("/auth", authRouter);
 
 const server = http.createServer(app);
 
@@ -29,6 +33,27 @@ mongoose
 
 const roomUsers = new Map<string, Set<string>>();
 
+// --- SOCKET AUTHENTICATION MIDDLEWARE ---
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+
+  if (!token) {
+    return next(new Error("Authentication error: No token provided"));
+  }
+
+  try {
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "super_secret_hackathon_key_change_later",
+    ) as any;
+    // Attach the user's username to the socket data so we can use it later!
+    socket.data.username = decoded.username;
+    next();
+  } catch (err) {
+    next(new Error("Authentication error: Invalid token"));
+  }
+});
+
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -40,14 +65,15 @@ io.on("connection", (socket) => {
     }
     roomUsers.get(roomId)?.add(socket.id);
 
-    // --- HYDRATION: Fetch board from DB and send to the user who just joined ---
+    // --- FIX: Atomic Upsert prevents Strict Mode race conditions ---
     try {
-      let board = await Board.findOne({ boardId: roomId });
-      if (!board) {
-        // Create the board if it doesn't exist yet
-        board = await Board.create({ boardId: roomId, elements: [] });
-      }
-      // Send the saved elements strictly to the user who joined
+      const board = await Board.findOneAndUpdate(
+        { boardId: roomId },
+        { $setOnInsert: { elements: [], title: `Board ${roomId}` } },
+        { returnDocument: "after", upsert: true },
+      );
+
+      // Send the saved elements to the user who joined
       socket.emit("board-state", board.elements);
     } catch (error) {
       console.error("Error fetching board state:", error);

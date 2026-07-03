@@ -9,6 +9,11 @@ interface BoardState {
   strokeColor: string;
   strokeWidth: number;
 
+  token: string | null;
+  username: string | null;
+  setAuth: (token: string | null, username: string | null) => void;
+  logout: () => void;
+
   // Local Actions
   setTool: (tool: Tool) => void;
   setColor: (color: string) => void;
@@ -17,8 +22,6 @@ interface BoardState {
   undo: () => void;
   redo: () => void;
   clearBoard: () => void;
-
-  // NEW: Remote Actions (State updates without broadcasting)
   addRemoteElement: (element: CanvasElement) => void;
   remoteUndo: () => void;
   remoteRedo: () => void;
@@ -32,6 +35,29 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   currentTool: "pen",
   strokeColor: "#ffffff",
   strokeWidth: 3,
+
+  token: localStorage.getItem("draw_token"),
+  username: localStorage.getItem("draw_username"),
+
+  setAuth: (token, username) => {
+    if (token && username) {
+      localStorage.setItem("draw_token", token);
+      localStorage.setItem("draw_username", username);
+    }
+    set({ token, username });
+  },
+
+  logout: () => {
+    localStorage.removeItem("draw_token");
+    localStorage.removeItem("draw_username");
+    set({
+      token: null,
+      username: null,
+      elements: [],
+      undoStack: [],
+      redoStack: [],
+    });
+  },
 
   setTool: (tool) => set({ currentTool: tool }),
   setColor: (color) => set({ strokeColor: color }),

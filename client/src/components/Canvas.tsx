@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useBoardStore } from "../store";
 import type { CanvasElement, Point } from "../types";
+import { useParams } from "react-router-dom";
 import { socket } from "../socket";
-
-// Hardcoded for Phase 2 MVP. We can make this dynamic later!
-const ROOM_ID = "hackathon-room";
 
 export const Canvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { roomId } = useParams();
+  const activeRoomId = roomId || "default-room";
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
     null,
@@ -145,7 +145,11 @@ export const Canvas: React.FC = () => {
     const { clientX, clientY } = e;
 
     // Always emit cursor position
-    socket.emit("cursor-move", { roomId: ROOM_ID, x: clientX, y: clientY });
+    socket.emit("cursor-move", {
+      roomId: activeRoomId,
+      x: clientX,
+      y: clientY,
+    });
 
     if (!isDrawing || !currentElement) return;
 
@@ -167,7 +171,7 @@ export const Canvas: React.FC = () => {
     }
 
     setCurrentElement(updatedElement);
-    socket.emit("draw-move", { roomId: ROOM_ID, element: updatedElement });
+    socket.emit("draw-move", { roomId: activeRoomId, element: updatedElement });
   };
 
   const startDrawing = (e: React.MouseEvent) => {
@@ -188,7 +192,7 @@ export const Canvas: React.FC = () => {
     };
 
     setCurrentElement(newElement);
-    socket.emit("draw-start", { roomId: ROOM_ID, element: newElement });
+    socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
   };
 
   const finishDrawing = () => {
@@ -196,7 +200,7 @@ export const Canvas: React.FC = () => {
 
     setIsDrawing(false);
     setElements([...elements, currentElement], true);
-    socket.emit("draw-end", { roomId: ROOM_ID, element: currentElement });
+    socket.emit("draw-end", { roomId: activeRoomId, element: currentElement });
     setCurrentElement(null);
   };
 
