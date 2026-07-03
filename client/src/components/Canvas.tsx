@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useBoardStore } from "../store";
-import type { CanvasElement, Point } from "../types";
+import type { CanvasElement } from "../types";
 import { useParams } from "react-router-dom";
 import { socket } from "../socket";
 
@@ -9,12 +9,16 @@ export const Canvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { roomId } = useParams();
   const activeRoomId = roomId || "default-room";
+
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentElement, setCurrentElement] = useState<CanvasElement | null>(
     null,
   );
 
-  // Transient remote states
+  // --- NEW: Panning State ---
+  const [isPanning, setIsPanning] = useState(false);
+  const [startPan, setStartPan] = useState({ x: 0, y: 0 });
+
   const [remoteElements, setRemoteElements] = useState<
     Record<string, CanvasElement>
   >({});
@@ -29,31 +33,42 @@ export const Canvas: React.FC = () => {
     strokeColor,
     strokeWidth,
     addRemoteElement,
+    zoom,
+    offsetX,
+    offsetY,
+    setOffset, // Pulled new pan states from store
   } = useBoardStore();
 
-  // --- SOCKET LISTENERS ---
+  // --- NEW: Coordinate Math Helper ---
+  // This calculates exact canvas pixels regardless of zoom or pan!
+  const getCoordinates = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / zoom,
+      y: (e.clientY - rect.top) / zoom,
+    };
+  };
+
   useEffect(() => {
-    socket.on("draw-start", ({ userId, element }) => {
-      setRemoteElements((prev) => ({ ...prev, [userId]: element }));
-    });
-
-    socket.on("draw-move", ({ userId, element }) => {
-      setRemoteElements((prev) => ({ ...prev, [userId]: element }));
-    });
-
+    socket.on("draw-start", ({ userId, element }) =>
+      setRemoteElements((prev) => ({ ...prev, [userId]: element })),
+    );
+    socket.on("draw-move", ({ userId, element }) =>
+      setRemoteElements((prev) => ({ ...prev, [userId]: element })),
+    );
     socket.on("draw-end", (element: CanvasElement) => {
       setRemoteElements((prev) => {
         const newState = { ...prev };
-        delete newState[element.createdBy!]; // Remove transient preview
+        delete newState[element.createdBy!];
         return newState;
       });
-      addRemoteElement(element); // Commit to persistent state
+      addRemoteElement(element);
     });
-
-    socket.on("cursor-move", ({ userId, x, y, username }) => {
-      setCursors((prev) => ({ ...prev, [userId]: { x, y, username } }));
-    });
-
+    socket.on("cursor-move", ({ userId, x, y, username }) =>
+      setCursors((prev) => ({ ...prev, [userId]: { x, y, username } })),
+    );
     socket.on("user-left", (userId) => {
       setCursors((prev) => {
         const newState = { ...prev };
@@ -76,18 +91,15 @@ export const Canvas: React.FC = () => {
     };
   }, [addRemoteElement]);
 
-  // --- RENDER LOOP ---
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Combine local persistent, local transient, and remote transient elements
     const allElements = [...elements];
     if (currentElement) allElements.push(currentElement);
     Object.values(remoteElements).forEach((el) => allElements.push(el));
@@ -95,14 +107,10 @@ export const Canvas: React.FC = () => {
     allElements.forEach((element) => {
       ctx.beginPath();
       ctx.lineWidth = element.strokeWidth;
-
-      if (element.type === "eraser") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-      } else {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.strokeStyle = element.color;
-      }
+      ctx.globalCompositeOperation =
+        element.type === "eraser" ? "destination-out" : "source-over";
+      ctx.strokeStyle =
+        element.type === "eraser" ? "rgba(0,0,0,1)" : element.color;
 
       if (
         (element.type === "pen" || element.type === "eraser") &&
@@ -140,44 +148,18 @@ export const Canvas: React.FC = () => {
       }
     });
     ctx.globalCompositeOperation = "source-over";
-  }, [elements, currentElement, remoteElements]); // Added remoteElements to dependency array
+  }, [elements, currentElement, remoteElements]);
 
-  // --- LOCAL DRAWING LOGIC WITH EMISSIONS ---
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const { clientX, clientY } = e;
-
-    // Always emit cursor position
-    socket.emit("cursor-move", {
-      roomId: activeRoomId,
-      x: clientX,
-      y: clientY,
-    });
-
-    if (!isDrawing || !currentElement) return;
-
-    const updatedElement = { ...currentElement };
-
-    if (updatedElement.type === "pen" || updatedElement.type === "eraser") {
-      updatedElement.points = [
-        ...(updatedElement.points || []),
-        { x: clientX, y: clientY },
-      ];
-    } else if (updatedElement.type === "line") {
-      updatedElement.points = [
-        updatedElement.points![0],
-        { x: clientX, y: clientY },
-      ];
-    } else {
-      updatedElement.width = clientX - updatedElement.x!;
-      updatedElement.height = clientY - updatedElement.y!;
+  // --- UPDATED: Mouse Handlers ---
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Check if using Hand tool OR Middle Mouse Button (button 1)
+    if (currentTool === "hand" || e.button === 1) {
+      setIsPanning(true);
+      setStartPan({ x: e.clientX, y: e.clientY });
+      return;
     }
 
-    setCurrentElement(updatedElement);
-    socket.emit("draw-move", { roomId: activeRoomId, element: updatedElement });
-  };
-
-  const startDrawing = (e: React.MouseEvent) => {
-    const { clientX, clientY } = e;
+    const { x, y } = getCoordinates(e);
     setIsDrawing(true);
 
     const newElement: CanvasElement = {
@@ -185,21 +167,56 @@ export const Canvas: React.FC = () => {
       type: currentTool,
       color: strokeColor,
       strokeWidth,
-      points: [{ x: clientX, y: clientY }],
-      x: clientX,
-      y: clientY,
+      points: [{ x, y }],
+      x,
+      y,
       width: 0,
       height: 0,
-      createdBy: socket.id, // Tag with user ID
+      createdBy: socket.id,
     };
 
     setCurrentElement(newElement);
     socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
   };
 
-  const finishDrawing = () => {
+  const handleMouseMove = (e: React.MouseEvent) => {
+    // Handle Panning
+    if (isPanning) {
+      const dx = e.clientX - startPan.x;
+      const dy = e.clientY - startPan.y;
+      setOffset(offsetX + dx, offsetY + dy);
+      setStartPan({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    // Get mathematically perfect coordinates for drawing and emitting
+    const { x, y } = getCoordinates(e);
+    socket.emit("cursor-move", { roomId: activeRoomId, x, y });
+
     if (!isDrawing || !currentElement) return;
 
+    const updatedElement = { ...currentElement };
+
+    if (updatedElement.type === "pen" || updatedElement.type === "eraser") {
+      updatedElement.points = [...(updatedElement.points || []), { x, y }];
+    } else if (updatedElement.type === "line") {
+      updatedElement.points = [updatedElement.points![0], { x, y }];
+    } else {
+      updatedElement.width = x - updatedElement.x!;
+      updatedElement.height = y - updatedElement.y!;
+    }
+
+    setCurrentElement(updatedElement);
+    socket.emit("draw-move", { roomId: activeRoomId, element: updatedElement });
+  };
+
+  const handleMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+
+    if (!isDrawing || !currentElement) return;
     setIsDrawing(false);
     setElements([...elements, currentElement], true);
     socket.emit("draw-end", { roomId: activeRoomId, element: currentElement });
@@ -207,15 +224,19 @@ export const Canvas: React.FC = () => {
   };
 
   return (
-    <>
-      {/* Render Live Cursors */}
+    <div
+      className="w-full h-full transform-gpu transition-none"
+      style={{
+        transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
+        transformOrigin: "0 0",
+      }}
+    >
       {Object.entries(cursors).map(([userId, cursor]) => (
         <div
           key={userId}
-          className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear flex flex-col items-start"
+          className="absolute pointer-events-none z-50 flex flex-col items-start"
           style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
         >
-          {/* Simple custom cursor SVG */}
           <svg
             width="24"
             height="36"
@@ -230,23 +251,23 @@ export const Canvas: React.FC = () => {
               strokeWidth="2"
             />
           </svg>
-
-          {/* NEW: Username Tag */}
           <div className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-md shadow-md ml-4 -mt-2">
             {cursor.username}
           </div>
         </div>
       ))}
+
       <canvas
         ref={canvasRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
-        onMouseDown={startDrawing}
+        // Made the canvas larger so you have room to pan around!
+        width={window.innerWidth * 3}
+        height={window.innerHeight * 3}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseUp={finishDrawing}
-        onMouseLeave={finishDrawing}
-        className="bg-gray-900 cursor-crosshair touch-none block"
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className={`${currentTool === "hand" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"} touch-none block`}
       />
-    </>
+    </div>
   );
 };

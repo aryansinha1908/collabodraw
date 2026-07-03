@@ -26,6 +26,15 @@ interface BoardState {
   remoteUndo: () => void;
   remoteRedo: () => void;
   remoteClear: () => void;
+
+  zoom: number;
+  setZoom: (zoom: number) => void;
+  roomUsers: { id: string; username: string }[];
+  setRoomUsers: (users: { id: string; username: string }[]) => void;
+
+  offsetX: number;
+  offsetY: number;
+  setOffset: (x: number, y: number) => void;
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -118,4 +127,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   remoteUndo: () => get().undo(),
   remoteRedo: () => get().redo(),
   remoteClear: () => get().clearBoard(),
+
+  zoom: 1,
+  setZoom: (zoom) => set({ zoom }),
+  roomUsers: [],
+  setRoomUsers: (roomUsers) => set({ roomUsers }),
+
+  offsetX: 0,
+  offsetY: 0,
+  setOffset: (offsetX, offsetY) => set({ offsetX, offsetY }),
 }));

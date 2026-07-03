@@ -56,6 +56,18 @@ io.use((socket, next) => {
   }
 });
 
+const getRoomUsers = (roomId: string) => {
+  const users: { id: string; username: string }[] = [];
+  const socketIds = roomUsers.get(roomId) || new Set();
+  for (const id of socketIds) {
+    const socket = io.sockets.sockets.get(id);
+    if (socket && socket.data.username) {
+      users.push({ id, username: socket.data.username });
+    }
+  }
+  return users;
+};
+
 io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -84,6 +96,7 @@ io.on("connection", (socket) => {
 
       socket.emit("board-state", board.elements);
       socket.to(roomId).emit("user-joined", socket.id);
+      io.to(roomId).emit("room-users", getRoomUsers(roomId));
     } catch (error) {
       console.error("Error joining room:", error);
       socket.emit("join-error", "Server error while joining board.");
@@ -147,11 +160,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`User disconnected: ${socket.id}`);
+    console.log("User disconnected:", socket.id);
+    // Find which rooms this socket was in, remove them, and update the room
     roomUsers.forEach((users, roomId) => {
       if (users.has(socket.id)) {
         users.delete(socket.id);
-        socket.to(roomId).emit("user-left", socket.id);
+        io.to(roomId).emit("room-users", getRoomUsers(roomId));
+        io.to(roomId).emit("user-left", socket.id);
       }
     });
   });
