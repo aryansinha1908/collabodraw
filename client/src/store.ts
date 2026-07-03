@@ -9,7 +9,7 @@ interface BoardState {
   strokeColor: string;
   strokeWidth: number;
 
-  // Actions
+  // Local Actions
   setTool: (tool: Tool) => void;
   setColor: (color: string) => void;
   setWidth: (width: number) => void;
@@ -17,6 +17,12 @@ interface BoardState {
   undo: () => void;
   redo: () => void;
   clearBoard: () => void;
+
+  // NEW: Remote Actions (State updates without broadcasting)
+  addRemoteElement: (element: CanvasElement) => void;
+  remoteUndo: () => void;
+  remoteRedo: () => void;
+  remoteClear: () => void;
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -37,7 +43,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         return {
           elements: newElements,
           undoStack: [...state.undoStack, state.elements],
-          redoStack: [], // Clear redo stack on new action
+          redoStack: [],
         };
       }
       return { elements: newElements };
@@ -47,13 +53,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   undo: () => {
     const { undoStack, elements, redoStack } = get();
     if (undoStack.length === 0) return;
-
     const previousElements = undoStack[undoStack.length - 1];
-    const newUndoStack = undoStack.slice(0, -1);
-
     set({
       elements: previousElements,
-      undoStack: newUndoStack,
+      undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, elements],
     });
   },
@@ -61,14 +64,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   redo: () => {
     const { undoStack, elements, redoStack } = get();
     if (redoStack.length === 0) return;
-
     const nextElements = redoStack[redoStack.length - 1];
-    const newRedoStack = redoStack.slice(0, -1);
-
     set({
       elements: nextElements,
       undoStack: [...undoStack, elements],
-      redoStack: newRedoStack,
+      redoStack: redoStack.slice(0, -1),
     });
   },
 
@@ -80,4 +80,16 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       redoStack: [],
     }));
   },
+
+  // --- NEW: REMOTE ACTIONS ---
+  addRemoteElement: (element) => {
+    set((state) => ({
+      elements: [...state.elements, element],
+      undoStack: [...state.undoStack, state.elements],
+      redoStack: [],
+    }));
+  },
+  remoteUndo: () => get().undo(),
+  remoteRedo: () => get().redo(),
+  remoteClear: () => get().clearBoard(),
 }));
