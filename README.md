@@ -1,343 +1,102 @@
 # CollaboDraw
 
--> A collaborative whiteboard web-based real-time platform for multiple users sessions.
+**A high-performance, real-time collaborative whiteboard built for seamless remote brainstorming, system design, and interactive learning.**
 
-## Project Goals
-
-1. Build a low-latency collaborative whiteboard
-2. Support multiple users drawing simultaneously
-3. Maintain board state persistently
-4. Ensure smooth UX with minimal synchronization issues
-5. Design architecture scalable to future features
-
-## Non-Goals (for Core MVP)
-
-- Advanced shape editing
-- Per-user undo/redo
-- CRDT / OT conflict resolution
-- Offline support
-
-## Tech Stack
-
-### Front-end
-
-- React
-- TypeScript
-- Vite
-- HTML Canvas API
-- Tailwind Css
-- Zustand
-
-### Back-end
-
-- Node.js
-- Express.js
-- TypeScript
-- Socket.IO
-
-### Database
-
-- MongoDB
-- Mongoose
-
-## Core MVP Features
-
-### 1. Board System
-
-- Create New Boards
-- Join boards using ID/Link
-- Board Persistence
-
-### 2. Drawing Tools
-
-- Pen
-- Eraser
-- Rectangle
-- Circle
-- Line
-
-### 3. Styling
-
-- Color Picker
-- Stroke Width
-
-### 4. Real-Time Features
-
-- Multi-user drawing
-- Live cursors
-- Connected users count
-
-### 5. Canvas Controls
-
-- Clear Board
-- Undo / Redo
+CollaboDraw allows multiple users to join a shared workspace, sketch ideas, and see updates instantly across all connected devices. Built with a focus on low-latency synchronization and responsive design, it provides a fluid experience on desktops, tablets, and mobile phones.
 
 ---
 
-## Compliance MVP
+## Key Features
 
-### Authentication
+### Core Collaboration
 
-- Register
-- Login
-- Protected board creation
-- Only authenticated users can create or access boards
+- **Real-Time Synchronization:** Instantaneous drawing updates across all connected clients via Socket.io.
+- **Live Presence:** View active user counts, live participant names, and synchronized real-time cursors.
+- **Persistent Workspaces:** All board states are automatically saved to MongoDB. Drop off and rejoin at any time without losing your work.
+- **Multi-Device Support:** Fully responsive canvas utilizing the modern Pointer Events API to natively support desktop mice, mobile touchscreens, and styluses simultaneously.
 
-## Stretch Features
+### Drawing & Canvas Engine
 
-- Permissions
-- PDF export
-- Image upload
-- Advanced object manipulation
-- Board history versions
-- Sticky notes
-- Chat system
+- **Dynamic Tools:** Freehand pen, straight lines, rectangles, circles, and an eraser.
+- **Granular Control:** Custom color picker and adjustable stroke width settings.
+- **Infinite Panning:** Middle-mouse or Hand-tool panning to navigate large diagrams.
+- **Multiplayer Undo/Redo:** Intelligent history stacks that safely isolate and revert your specific actions without deleting your teammates' active strokes.
 
----
+### Professional Workflows
 
-## Project Architecture
-
-### Event Model
-
-Two categories of events exist:
-
-#### Temporary Events (not persisted)
-
-- draw-start
-- draw-move
-- cursor-move
-
-Used for live collaboration previews.
-
-#### Persistent Events / Elements
-
-- draw-end
-- clear-board
-- undo
-- redo
-
-These update board state and are persisted in MongoDB.
-
-```
-React Client
-    |
-    V
-Socket IO
-    |
-    V
-Node/Express Server
-    |
-    V
-MongoDB
-```
-
-## State Classification
-
-Persistent State (MongoDB)
-
-- Boards
-- Drawing elements
-
-Transient State (Memory / Socket Server)
-
-- Active users
-- Live cursors
-- Temporary drawing previews
-
-### Front-end Responsibilities
-
-React app handles:
-
-- Toolbar UI
-- Canvas rendering
-- Local drawing state
-- Socket events
-- Cursor rendering
-
-### Back-end Responsibilities
-
-Server handles:
-
-- Room creation
-- Room joining
-- Socket broadcasting
-- Persistence
-- User presence
-
-Back-end Routes:
-
-```
-Auth Route:
-    POST /auth/register
-    POST /auth/login
-    GET /auth/me
-    POST /auth/logout
-```
-
-Socket events:
-
-- create-room
-- join-room
-- draw-start
-- draw-move
-- draw-end
-- cursor-move
-- undo
-- redo
-- clear-board
-- disconnect
-
-## Socket Authentication
-
-Client sends JWT token during socket connection.
-
-Example:
-socket.auth = {
-token: jwt
-}
-
-Server verifies token before allowing room access.
-
-Benefits:
-
-- Identify connected users
-- Secure board access
-- Associate cursors with users
+- **Secure Authentication:** JWT-based user registration and protected board creation.
+- **Frictionless Sharing:** Invite collaborators instantly using shareable 6-character board IDs.
+- **Keyboard Shortcuts:** Rapid-fire `Ctrl+Z` (Undo) and `Ctrl+Y` (Redo) support for power users.
+- **Multi-Format Export:** Download high-resolution snapshots of your board in PNG, JPG, or PDF formats.
 
 ---
 
-### Data Model
+## System Architecture
 
-1. Board
+CollaboDraw utilizes a split-deployment architecture to maximize edge-delivery speeds while maintaining persistent WebSocket connections.
 
-```json
-interface Board {
-  boardId: string
-  title: string
-  createdAt: Date
-  updatedAt: Date
-  elements: CanvasElement[]
-}
-```
+- **Frontend (Vercel):** React, TypeScript, Vite, and Zustand. Hosted on Vercel's edge network for lightning-fast static asset delivery and SPA routing.
+- **Backend (Render):** Node.js, Express, and Socket.io. Hosted on Render to support the long-lived, persistent container environments required for uninterrupted WebSocket syncing.
+- **Database (MongoDB Atlas):** NoSQL document storage for persistent board elements and user credentials.
 
-1. Element
+### Event Synchronization Model
 
-```json
-{
-  id: String,
-  type: "pen" | "line" | "rect" | "circle",
-  points: [],
-  x: Number,
-  y: Number,
-  width: Number,
-  height: Number,
-  color: String,
-  strokeWidth: Number,
-  createdBy: String
-}
-```
+To protect server resources, the app categorizes network events:
 
-1. User
-
-```json
-interface User {
-  _id: string
-  username: string
-  email: string
-  passwordHash: string
-}
-```
-
-Pen uses:
-
-- points
-
-Rectangle/circle uses:
-
-- x y width height
-
-### State-driven Rendering
-
-Maintain:
-
-- elements = []
-
-On every Frame:
-
-1. Clear Canvas
-2. Redraw all elements
-
-#### Undo/Redo Architecture
-
-Two stacks are created:
-
-```js
-elements = [];
-undoStack = [];
-redoStack = [];
-```
-
-Undo Policy:
-
-- Global undo only
-- Undo removes latest completed element
-- Partial strokes cannot be undone
-
-Undo:
-
-```
-pop from elements
-push into redoStack
-```
-
-Redo:
-
-```
-pop from redoStack
-push into elements
-```
-
-## Edge Cases
-
-- User joins late → hydrate full board
-- User disconnects mid-draw
-- Multiple undo requests simultaneously
-- Network lag causes out-of-order events
-- Clear board while someone is drawing
+1. **Transient Events (Memory/Socket):** `draw-start`, `draw-move`, `cursor-move`. These are broadcasted directly peer-to-peer via the server for live previews and are throttled (50ms intervals) to prevent network flooding.
+2. **Persistent Events (Database):** `draw-end`, `clear-board`, `undo`. These trigger asynchronous MongoDB updates to ensure the permanent board record remains pristine.
 
 ---
 
-## Development Roadmap
+## Technical Challenges Conquered
 
-### Phase 1 — Local Canvas Engine
+- **The Canvas Wipe Bug:** HTML5 `<canvas>` elements natively clear their context upon window resize. Fixed by binding window dimensions to React state with a debounced listener, forcing an automatic React re-render of the history stack in milliseconds.
+- **WebSocket Flooding:** Uncapped `onMouseMove` events were generating 600+ network requests per second per user. Implemented a timestamp delta throttle to cap emissions, reducing network load by 80% while maintaining visual fluidity.
+- **Targeted History Deletion:** Standard `pop()` array methods would delete the absolute latest element drawn in the room, breaking multiplayer undo. Engineered a custom backend splice function to locate and isolate only the requesting user's latest stroke index.
 
-- Toolbar UI
-- Canvas rendering
-- Drawing tools
-- Styling controls
+---
 
-### Phase 2 — Real-Time Collaboration
+## Local Development Setup
 
-- Socket.IO setup
-- Room creation/joining
-- Live drawing synchronization
-- Live cursors
+**1. Clone the repository**
 
-### Phase 3 — Persistence
+```bash
+git clone [https://github.com/yourusername/collabodraw.git](https://github.com/yourusername/collabodraw.git)
+```
 
-- MongoDB integration
-- Save board state
-- Restore previous board state
+2. Setup the backend
 
-### Phase 4 — Authentication (Mandatory)
+```bash
+cd collabodraw-server
+npm install
+```
 
-- Register/Login
-- JWT auth
-- Protected routes
-- Socket authentication
+Create a .env file in the server directory:
+Code snippet:-
 
-### Phase 5 — Polish
+```
+PORT=3001
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+CLIENT_URL=<http://localhost:5173>
+```
 
-- Better UI
-- Export
-- Stretch features
+Start the server: `npm run dev`
+
+3. Setup the Frontend
+
+```bash
+cd ../collabodraw-frontend
+npm install
+```
+
+Create a .env file in the frontend directory:
+Code snippet:-
+
+```
+VITE_BACKEND_URL=<http://localhost:3001>
+```
+
+Start the client: `npm run dev`
+
+Built with ❤️ for [HackSphere]
