@@ -15,7 +15,6 @@ import {
   Trash2,
   LogOut,
   Menu,
-  X,
   Home,
   ZoomIn,
   ZoomOut,
