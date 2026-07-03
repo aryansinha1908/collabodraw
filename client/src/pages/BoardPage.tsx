@@ -1,3 +1,4 @@
+import { jsPDF } from "jspdf";
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "../components/Canvas";
@@ -27,6 +28,7 @@ export const BoardPage = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   const {
     currentTool,
@@ -70,7 +72,7 @@ export const BoardPage = () => {
     // Listen for the live roster updates
     socket.on("room-users", (users) => setRoomUsers(users));
 
-    socket.on("undo", remoteUndo);
+    socket.on("undo", (userId) => remoteUndo(userId));
     socket.on("redo", remoteRedo);
     socket.on("clear-board", remoteClear);
 
@@ -98,30 +100,48 @@ export const BoardPage = () => {
   const handleZoomOut = () => setZoom(Math.max(zoom - 0.2, 0.4));
   const handleZoomReset = () => setZoom(1);
 
-  const handleExport = () => {
+  const handleExport = (format: "png" | "jpg" | "pdf") => {
     const canvas = document.querySelector("canvas");
     if (!canvas) return;
 
-    // Create a temporary hidden canvas
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = canvas.width;
     tempCanvas.height = canvas.height;
     const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Fill it with the dark background color
-    ctx.fillStyle = "#111827"; // Tailwind bg-gray-900
+    // Fill background (Crucial for JPG and PDF, otherwise transparent pixels turn black!)
+    ctx.fillStyle = "#111827";
     ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-    // Draw the actual whiteboard on top of the background
     ctx.drawImage(canvas, 0, 0);
 
-    // Convert to a PNG URL and trigger the download
-    const dataUrl = tempCanvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = `CollaboDraw-${roomId}.png`;
-    link.href = dataUrl;
-    link.click();
+    const filename = `CollaboDraw-${roomId}`;
+
+    if (format === "png" || format === "jpg") {
+      const mimeType = format === "png" ? "image/png" : "image/jpeg";
+      const dataUrl = tempCanvas.toDataURL(mimeType, 1.0);
+      const link = document.createElement("a");
+      link.download = `${filename}.${format}`;
+      link.href = dataUrl;
+      link.click();
+    } else if (format === "pdf") {
+      // Grab the image as a high-quality JPEG to embed in the PDF
+      const imgData = tempCanvas.toDataURL("image/jpeg", 1.0);
+
+      // Create a PDF with the exact dimensions of our canvas
+      const pdf = new jsPDF({
+        orientation:
+          tempCanvas.width > tempCanvas.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [tempCanvas.width, tempCanvas.height],
+      });
+
+      pdf.addImage(imgData, "JPEG", 0, 0, tempCanvas.width, tempCanvas.height);
+      pdf.save(`${filename}.pdf`);
+    }
+
+    // Close the menu after exporting
+    setIsExportMenuOpen(false);
   };
 
   return (
@@ -248,10 +268,11 @@ export const BoardPage = () => {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              undo();
-              socket.emit("undo", roomId);
+              undo(socket.id as string);
+              socket.emit("undo", { roomId, userId: socket.id });
             }}
             className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg"
+            title="Undo"
           >
             <Undo size={20} />
           </button>
@@ -277,13 +298,39 @@ export const BoardPage = () => {
           {/* Vertical Divider */}
           <div className="w-px h-8 bg-gray-600 mx-1 self-center"></div>
 
-          <button
-            onClick={handleExport}
-            className="p-2 text-green-400 hover:text-green-300 hover:bg-gray-700 rounded-lg"
-            title="Export to PNG"
-          >
-            <Download size={20} />
-          </button>
+          <div className="relative flex items-center">
+            <button
+              onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+              className={`p-2 rounded-lg transition-colors ${isExportMenuOpen ? "bg-gray-700 text-green-300" : "text-green-400 hover:text-green-300 hover:bg-gray-700"}`}
+              title="Export Options"
+            >
+              <Download size={20} />
+            </button>
+
+            {/* The Floating Menu */}
+            {isExportMenuOpen && (
+              <div className="absolute top-full mt-3 right-0 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col z-50 min-w-[140px]">
+                <button
+                  onClick={() => handleExport("png")}
+                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors border-b border-gray-700"
+                >
+                  Export as PNG
+                </button>
+                <button
+                  onClick={() => handleExport("jpg")}
+                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors border-b border-gray-700"
+                >
+                  Export as JPG
+                </button>
+                <button
+                  onClick={() => handleExport("pdf")}
+                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                >
+                  Export as PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

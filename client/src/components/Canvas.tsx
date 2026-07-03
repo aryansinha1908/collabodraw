@@ -6,6 +6,7 @@ import { useParams } from "react-router-dom";
 import { socket } from "../socket";
 
 export const Canvas: React.FC = () => {
+  const lastCursorEmit = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { roomId } = useParams();
   const activeRoomId = roomId || "default-room";
@@ -25,6 +26,10 @@ export const Canvas: React.FC = () => {
   const [cursors, setCursors] = useState<
     Record<string, { x: number; y: number; username: string }>
   >({});
+  const [canvasSize, setCanvasSize] = useState({
+    width: window.innerWidth * 3,
+    height: window.innerHeight * 3,
+  });
 
   const {
     elements,
@@ -50,6 +55,27 @@ export const Canvas: React.FC = () => {
       y: (e.clientY - rect.top) / zoom,
     };
   };
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const handleResize = () => {
+      // Optional: A tiny debounce so it doesn't fire 100 times while dragging the window
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setCanvasSize({
+          width: window.innerWidth * 3,
+          height: window.innerHeight * 3,
+        });
+      }, 100);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     socket.on("draw-start", ({ userId, element }) =>
@@ -148,7 +174,7 @@ export const Canvas: React.FC = () => {
       }
     });
     ctx.globalCompositeOperation = "source-over";
-  }, [elements, currentElement, remoteElements]);
+  }, [elements, currentElement, remoteElements, canvasSize]);
 
   // --- UPDATED: Mouse Handlers ---
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -191,7 +217,13 @@ export const Canvas: React.FC = () => {
 
     // Get mathematically perfect coordinates for drawing and emitting
     const { x, y } = getCoordinates(e);
-    socket.emit("cursor-move", { roomId: activeRoomId, x, y });
+
+    // THE FIX: Throttle the mouse movement emit to every 50ms
+    const now = Date.now();
+    if (now - lastCursorEmit.current > 50) {
+      socket.emit("cursor-move", { roomId: activeRoomId, x, y });
+      lastCursorEmit.current = now;
+    }
 
     if (!isDrawing || !currentElement) return;
 
@@ -259,9 +291,9 @@ export const Canvas: React.FC = () => {
 
       <canvas
         ref={canvasRef}
-        // Made the canvas larger so you have room to pan around!
-        width={window.innerWidth * 3}
-        height={window.innerHeight * 3}
+        // Change these two lines:
+        width={canvasSize.width}
+        height={canvasSize.height}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

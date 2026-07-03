@@ -140,14 +140,25 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("undo", async (roomId: string) => {
-    socket.to(roomId).emit("undo");
+  socket.on("undo", async ({ roomId, userId }) => {
+    // 1. Tell all other clients to run their specific user undo logic
+    socket.to(roomId).emit("undo", userId);
+
     try {
-      // Remove the very last element from the DB array (Global Undo)
-      await Board.findOneAndUpdate(
-        { boardId: roomId },
-        { $pop: { elements: 1 } },
-      );
+      // 2. Fetch the current board from the DB
+      const board = await Board.findOne({ boardId: roomId });
+      if (!board) return;
+
+      // 3. Find the index of the absolute last element created by THIS user
+      const lastUserElementIndex = board.elements
+        .map((e: any) => e.createdBy)
+        .lastIndexOf(userId);
+
+      // 4. If we found one, slice it out and save the updated array back to the DB
+      if (lastUserElementIndex !== -1) {
+        board.elements.splice(lastUserElementIndex, 1);
+        await board.save();
+      }
     } catch (error) {
       console.error("Failed to undo in DB:", error);
     }

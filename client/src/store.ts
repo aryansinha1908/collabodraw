@@ -19,11 +19,11 @@ interface BoardState {
   setColor: (color: string) => void;
   setWidth: (width: number) => void;
   setElements: (elements: CanvasElement[], saveHistory?: boolean) => void;
-  undo: () => void;
+  undo: (userId: string) => void;
   redo: () => void;
   clearBoard: () => void;
   addRemoteElement: (element: CanvasElement) => void;
-  remoteUndo: () => void;
+  remoteUndo: (userId: string) => void;
   remoteRedo: () => void;
   remoteClear: () => void;
 
@@ -85,16 +85,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     });
   },
 
-  undo: () => {
-    const { undoStack, elements, redoStack } = get();
-    if (undoStack.length === 0) return;
-    const previousElements = undoStack[undoStack.length - 1];
-    set({
-      elements: previousElements,
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, elements],
-    });
-  },
+  // Find your undo function in useBoardStore and replace it with this:
+  undo: (userId: string) =>
+    set((state) => {
+      const lastUserElementIndex = state.elements
+        .map((e) => e.createdBy)
+        .lastIndexOf(userId);
+
+      if (lastUserElementIndex === -1) return state; // Nothing to undo
+
+      const newElements = [...state.elements];
+      newElements.splice(lastUserElementIndex, 1);
+
+      return {
+        elements: newElements,
+        redoStack: [...state.redoStack, state.elements],
+      };
+    }),
 
   redo: () => {
     const { undoStack, elements, redoStack } = get();
@@ -124,7 +131,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       redoStack: [],
     }));
   },
-  remoteUndo: () => get().undo(),
+  remoteUndo: (userId) => get().undo(userId),
   remoteRedo: () => get().redo(),
   remoteClear: () => get().clearBoard(),
 
