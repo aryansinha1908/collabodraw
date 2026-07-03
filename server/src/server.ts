@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import { Board } from "./models";
 import jwt from "jsonwebtoken";
 import { authRouter } from "./routes/auth";
+import { boardsRouter } from "./routes/boards";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
 app.use(express.json());
 
 app.use("/auth", authRouter);
+app.use("/boards", boardsRouter);
 
 const server = http.createServer(app);
 
@@ -58,28 +60,34 @@ io.on("connection", (socket) => {
   console.log(`User connected: ${socket.id}`);
 
   socket.on("join-room", async (roomId: string) => {
-    socket.join(roomId);
-
-    if (!roomUsers.has(roomId)) {
-      roomUsers.set(roomId, new Set());
-    }
-    roomUsers.get(roomId)?.add(socket.id);
-
-    // --- FIX: Atomic Upsert prevents Strict Mode race conditions ---
     try {
-      const board = await Board.findOneAndUpdate(
-        { boardId: roomId },
-        { $setOnInsert: { elements: [], title: `Board ${roomId}` } },
-        { returnDocument: "after", upsert: true },
-      );
+      // 1. Check if the board actually exists
+      const board = await Board.findOne({ boardId: roomId });
+      if (!board) {
+        return socket.emit(
+          "join-error",
+          "Board not found. Please check the link.",
+        );
+      }
 
-      // Send the saved elements to the user who joined
+      // 2. Check room capacity
+      const currentRoomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+      if (currentRoomSize >= board.maxUsers) {
+        return socket.emit("join-error", "Board is at maximum capacity.");
+      }
+
+      // 3. Allow them in!
+      socket.join(roomId);
+
+      if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Set());
+      roomUsers.get(roomId)?.add(socket.id);
+
       socket.emit("board-state", board.elements);
+      socket.to(roomId).emit("user-joined", socket.id);
     } catch (error) {
-      console.error("Error fetching board state:", error);
+      console.error("Error joining room:", error);
+      socket.emit("join-error", "Server error while joining board.");
     }
-
-    socket.to(roomId).emit("user-joined", socket.id);
   });
 
   // --- Transient Events (Unchanged) ---

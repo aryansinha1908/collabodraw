@@ -66,6 +66,12 @@ export const BoardPage = () => {
     socket.on("redo", remoteRedo);
     socket.on("clear-board", remoteClear);
 
+    // Handle specific join rejections from the server
+    socket.on("join-error", (errorMessage) => {
+      alert(errorMessage); // Show the user why they were rejected
+      navigate("/"); // Kick them back to the dashboard
+    });
+
     return () => {
       socket.disconnect();
       socket.off("connect");
@@ -74,6 +80,7 @@ export const BoardPage = () => {
       socket.off("undo");
       socket.off("redo");
       socket.off("clear-board");
+      socket.off("join-error");
     };
   }, [roomId, token, navigate, logout, remoteUndo, remoteRedo, remoteClear]);
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Auth } from "./components/Auth";
 import { Home } from "./pages/Home";
 import { BoardPage } from "./pages/BoardPage";
+import { Dashboard } from "./pages/Dashboard";
 import { useBoardStore } from "./store";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -26,6 +27,14 @@ function App() {
           element={
             <ProtectedRoute>
               <BoardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
             </ProtectedRoute>
           }
         />

@@ -29,14 +29,15 @@ const ElementSchema = new mongoose.Schema(
 // Board schema to contain the elements
 const BoardSchema = new mongoose.Schema(
   {
-    boardId: { type: String, required: true, unique: true },
-    title: { type: String, default: "Hackathon Board" },
+    boardId: { type: String, required: true, unique: true }, // The 6-char link
+    title: { type: String, required: true, default: "Untitled Board" },
+    ownerId: { type: String, required: true }, // Links to the User who created it
+    maxUsers: { type: Number, default: 10 },
+    isPrivate: { type: Boolean, default: false },
     elements: [ElementSchema],
   },
   { timestamps: true },
 );
-
-export const Board = mongoose.model("Board", BoardSchema);
 
 const UserSchema = new mongoose.Schema(
   {
@@ -47,4 +48,5 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+export const Board = mongoose.model("Board", BoardSchema);
 export const User = mongoose.model("User", UserSchema);

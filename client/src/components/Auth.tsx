@@ -41,7 +41,7 @@ export const Auth: React.FC = () => {
       setAuth(data.token, data.username);
 
       // 3. Redirect to the home page on success!
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err.message);
     } finally {
