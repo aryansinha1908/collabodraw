@@ -18,7 +18,9 @@ export const Canvas: React.FC = () => {
   const [remoteElements, setRemoteElements] = useState<
     Record<string, CanvasElement>
   >({});
-  const [cursors, setCursors] = useState<Record<string, Point>>({});
+  const [cursors, setCursors] = useState<
+    Record<string, { x: number; y: number; username: string }>
+  >({});
 
   const {
     elements,
@@ -48,8 +50,8 @@ export const Canvas: React.FC = () => {
       addRemoteElement(element); // Commit to persistent state
     });
 
-    socket.on("cursor-move", ({ userId, x, y }) => {
-      setCursors((prev) => ({ ...prev, [userId]: { x, y } }));
+    socket.on("cursor-move", ({ userId, x, y, username }) => {
+      setCursors((prev) => ({ ...prev, [userId]: { x, y, username } }));
     });
 
     socket.on("user-left", (userId) => {
@@ -207,11 +209,11 @@ export const Canvas: React.FC = () => {
   return (
     <>
       {/* Render Live Cursors */}
-      {Object.entries(cursors).map(([userId, point]) => (
+      {Object.entries(cursors).map(([userId, cursor]) => (
         <div
           key={userId}
-          className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear"
-          style={{ transform: `translate(${point.x}px, ${point.y}px)` }}
+          className="absolute pointer-events-none z-50 transition-all duration-75 ease-linear flex flex-col items-start"
+          style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
         >
           {/* Simple custom cursor SVG */}
           <svg
@@ -228,6 +230,11 @@ export const Canvas: React.FC = () => {
               strokeWidth="2"
             />
           </svg>
+
+          {/* NEW: Username Tag */}
+          <div className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-md shadow-md ml-4 -mt-2">
+            {cursor.username}
+          </div>
         </div>
       ))}
       <canvas

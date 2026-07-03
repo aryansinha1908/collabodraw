@@ -91,10 +91,6 @@ io.on("connection", (socket) => {
   });
 
   // --- Transient Events (Unchanged) ---
-  socket.on("cursor-move", ({ roomId, x, y }) => {
-    socket.to(roomId).emit("cursor-move", { userId: socket.id, x, y });
-  });
-
   socket.on("draw-start", ({ roomId, element }) => {
     socket.to(roomId).emit("draw-start", { userId: socket.id, element });
   });
@@ -157,6 +153,15 @@ io.on("connection", (socket) => {
         users.delete(socket.id);
         socket.to(roomId).emit("user-left", socket.id);
       }
+    });
+  });
+
+  socket.on("cursor-move", ({ roomId, x, y }) => {
+    socket.to(roomId).emit("cursor-move", {
+      userId: socket.id,
+      x,
+      y,
+      username: socket.data.username,
     });
   });
 });

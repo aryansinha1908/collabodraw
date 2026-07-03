@@ -36,8 +36,18 @@ boardsRouter.post("/", requireAuth, async (req: any, res) => {
   try {
     const { title, maxUsers, isPrivate } = req.body;
 
-    // Generate a random 6-character alphanumeric ID
-    const boardId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    // --- FIX: The Collision Retry Loop ---
+    let boardId = "";
+    let isUnique = false;
+
+    // Keep generating until we find an ID that doesn't exist in the database
+    while (!isUnique) {
+      boardId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const existingBoard = await Board.findOne({ boardId });
+      if (!existingBoard) {
+        isUnique = true; // Break the loop!
+      }
+    }
 
     const newBoard = await Board.create({
       boardId,

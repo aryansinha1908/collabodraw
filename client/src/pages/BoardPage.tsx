@@ -29,6 +29,8 @@ export const BoardPage = () => {
     remoteUndo,
     remoteRedo,
     remoteClear,
+    setWidth,
+    strokeWidth,
     token,
     username,
     logout,
@@ -156,6 +158,21 @@ export const BoardPage = () => {
             onChange={(e) => setColor(e.target.value)}
             defaultValue="#ffffff"
             className="w-8 h-8 rounded cursor-pointer bg-transparent"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 border-r border-gray-600 pr-4">
+          <div
+            className="w-4 h-4 rounded-full bg-gray-400"
+            style={{ transform: `scale(${strokeWidth / 10})` }}
+          ></div>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={strokeWidth}
+            onChange={(e) => setWidth(Number(e.target.value))}
+            className="w-24 accent-blue-500 cursor-pointer"
           />
         </div>
 
