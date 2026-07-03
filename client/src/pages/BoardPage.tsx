@@ -48,6 +48,8 @@ export const BoardPage = () => {
     setZoom,
     roomUsers,
     setRoomUsers,
+    offsetX, // Extracted panning offsets from the store
+    offsetY,
   } = useBoardStore();
 
   useEffect(() => {
@@ -69,7 +71,6 @@ export const BoardPage = () => {
       useBoardStore.getState().setElements(loadedElements, false),
     );
 
-    // Listen for the live roster updates
     socket.on("room-users", (users) => setRoomUsers(users));
 
     socket.on("undo", (userId) => remoteUndo(userId));
@@ -110,8 +111,8 @@ export const BoardPage = () => {
     const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Fill background (Crucial for JPG and PDF, otherwise transparent pixels turn black!)
-    ctx.fillStyle = "#111827";
+    // Updated background fill color to perfectly match the new #0d1117 dark theme
+    ctx.fillStyle = "#0d1117";
     ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
     ctx.drawImage(canvas, 0, 0);
 
@@ -125,10 +126,8 @@ export const BoardPage = () => {
       link.href = dataUrl;
       link.click();
     } else if (format === "pdf") {
-      // Grab the image as a high-quality JPEG to embed in the PDF
       const imgData = tempCanvas.toDataURL("image/jpeg", 1.0);
 
-      // Create a PDF with the exact dimensions of our canvas
       const pdf = new jsPDF({
         orientation:
           tempCanvas.width > tempCanvas.height ? "landscape" : "portrait",
@@ -140,21 +139,17 @@ export const BoardPage = () => {
       pdf.save(`${filename}.pdf`);
     }
 
-    // Close the menu after exporting
     setIsExportMenuOpen(false);
   };
 
-  // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Ctrl (Windows) or Cmd (Mac)
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "z" && !e.shiftKey) {
           e.preventDefault();
           undo(socket.id as string);
           socket.emit("undo", { roomId, userId: socket.id });
         } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
-          // Supports Ctrl+Y and Ctrl+Shift+Z
           e.preventDefault();
           redo();
           socket.emit("redo", roomId);
@@ -164,117 +159,158 @@ export const BoardPage = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [roomId, undo, redo]); // Make sure you added 'undo' and 'redo' to your destructuring from useBoardStore!
+  }, [roomId, undo, redo]);
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-gray-900 font-sans">
-      {/* Menu Toggle Button */}
+    <div
+      className="relative h-screen w-screen overflow-hidden bg-[#0d1117] font-sans"
+      style={{
+        // Dynamically binds the grid position and scale to the global canvas pan/zoom state
+        backgroundImage: `linear-gradient(to right, #1f2937 1px, transparent 1px), linear-gradient(to bottom, #1f2937 1px, transparent 1px)`,
+        backgroundSize: `${64 * zoom}px ${64 * zoom}px`,
+        backgroundPosition: `${offsetX}px ${offsetY}px`,
+      }}
+    >
+      {/* Invisible Hover Trigger Zone */}
+      <div
+        className="absolute top-0 left-0 h-full w-6 z-40"
+        onMouseEnter={() => setIsSidebarOpen(true)}
+      />
+
+      {/* Menu Toggle Button (Fades out when sidebar opens) */}
       <button
-        onClick={() => setIsSidebarOpen(true)}
-        className="absolute top-4 left-4 p-3 bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 rounded-xl shadow-lg border border-gray-700 z-40 transition-colors"
+        onMouseEnter={() => setIsSidebarOpen(true)}
+        className={`absolute top-4 left-4 p-3 bg-gray-900/80 backdrop-blur-md text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl shadow-lg border border-gray-700 z-40 transition-all duration-300 ${
+          isSidebarOpen
+            ? "opacity-0 pointer-events-none scale-90"
+            : "opacity-100 scale-100"
+        }`}
       >
         <Menu size={24} />
       </button>
 
-      {/* --- LEFT SIDEBAR --- */}
+      {/* --- LEFT SIDEBAR (Floating & Hover-Responsive) --- */}
+      {/* Invisible Hover Trigger Zone */}
       <div
-        className={`absolute top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 shadow-2xl flex flex-col justify-between transform transition-transform duration-300 z-50 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className="absolute top-0 left-0 h-full w-8 z-40"
+        onMouseEnter={() => setIsSidebarOpen(true)}
+      />
+
+      {/* Menu Toggle Button (Fades out when sidebar opens) */}
+      <button
+        onMouseEnter={() => setIsSidebarOpen(true)}
+        className={`absolute top-4 left-4 p-3 bg-gray-900/60 backdrop-blur-md text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl shadow-lg border border-gray-700/50 z-40 transition-all duration-300 ${
+          isSidebarOpen
+            ? "opacity-0 pointer-events-none scale-90"
+            : "opacity-100 scale-100"
+        }`}
+      >
+        <Menu size={24} />
+      </button>
+
+      {/* --- LEFT SIDEBAR (Floating, Glassmorphism, Hover-Responsive) --- */}
+      <div
+        onMouseLeave={() => setIsSidebarOpen(false)}
+        className={`absolute top-4 left-4 h-[calc(100vh-2rem)] w-64 bg-gray-900/60 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl flex flex-col justify-between transform transition-all duration-300 z-50 overflow-hidden ${
+          isSidebarOpen
+            ? "translate-x-0 opacity-100"
+            : "-translate-x-[120%] opacity-0"
+        }`}
       >
         <div>
-          <div className="flex justify-between items-center p-6 border-b border-gray-700">
-            <h2 className="text-2xl font-bold text-white tracking-wide">
+          <div className="flex justify-between items-center p-6 border-b border-gray-700/50 bg-gray-900/20">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-3">
+              <img
+                src="/favicon-32x32.png"
+                alt="Logo"
+                className="w-7 h-7 rounded shadow-sm"
+              />
               Menu
             </h2>
-            <button
-              onClick={() => setIsSidebarOpen(false)}
-              className="text-gray-400 hover:text-white"
-            >
-              <X size={24} />
-            </button>
           </div>
           <div className="p-4 flex flex-col gap-2">
             <button
               onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-3 w-full p-3 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+              className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
             >
-              <Home size={20} />{" "}
-              <span className="font-semibold">Dashboard</span>
+              <Home size={18} />{" "}
+              <span className="font-semibold text-sm">Dashboard</span>
             </button>
           </div>
         </div>
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-4 border-t border-gray-700/50 bg-gray-900/20">
           <button
             onClick={() => {
               logout();
               navigate("/");
             }}
-            className="flex items-center gap-3 w-full p-3 rounded-lg text-red-400 hover:bg-gray-700 hover:text-red-300 transition-colors"
+            className="flex items-center gap-3 w-full p-3 rounded-xl text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
           >
-            <LogOut size={20} />{" "}
-            <span className="font-semibold">Exit Room</span>
+            <LogOut size={18} />{" "}
+            <span className="font-semibold text-sm">Exit Room</span>
           </button>
         </div>
       </div>
 
       {/* --- TOP TOOLBAR (Drawing Controls) --- */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-gray-800 p-3 rounded-xl shadow-lg border border-gray-700 z-10">
-        <div className="flex gap-2 border-r border-gray-600 pr-4">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-gray-900/80 backdrop-blur-md p-2.5 rounded-xl shadow-2xl border border-gray-700 z-10">
+        <div className="flex gap-1.5 border-r border-gray-700 pr-4">
           <button
             onClick={() => setTool("hand")}
-            className={`p-2 rounded-lg ${currentTool === "hand" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "hand" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Pan Tool"
           >
-            <Hand size={20} />
+            <Hand size={18} />
           </button>
           <button
             onClick={() => setTool("pen")}
-            className={`p-2 rounded-lg ${currentTool === "pen" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "pen" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Pen"
           >
-            <Pen size={20} />
+            <Pen size={18} />
           </button>
           <button
             onClick={() => setTool("eraser")}
-            className={`p-2 rounded-lg ${currentTool === "eraser" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "eraser" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Eraser"
           >
-            <Eraser size={20} />
+            <Eraser size={18} />
           </button>
           <button
             onClick={() => setTool("rect")}
-            className={`p-2 rounded-lg ${currentTool === "rect" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "rect" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Rectangle"
           >
-            <Square size={20} />
+            <Square size={18} />
           </button>
           <button
             onClick={() => setTool("circle")}
-            className={`p-2 rounded-lg ${currentTool === "circle" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "circle" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Circle"
           >
-            <Circle size={20} />
+            <Circle size={18} />
           </button>
           <button
             onClick={() => setTool("line")}
-            className={`p-2 rounded-lg ${currentTool === "line" ? "bg-blue-500" : "hover:bg-gray-700"} text-white`}
+            className={`p-2.5 rounded-lg transition-colors ${currentTool === "line" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
             title="Line"
           >
-            <Minus size={20} />
+            <Minus size={18} />
           </button>
         </div>
 
-        <div className="flex items-center gap-2 border-r border-gray-600 pr-4">
+        <div className="flex items-center gap-2 border-r border-gray-700 pr-4">
           <input
             type="color"
             onChange={(e) => setColor(e.target.value)}
             defaultValue="#ffffff"
-            className="w-8 h-8 rounded cursor-pointer bg-transparent"
+            className="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0 p-0"
           />
         </div>
 
-        <div className="flex items-center gap-3 border-r border-gray-600 pr-4">
+        <div className="flex items-center gap-4 border-r border-gray-700 pr-4 pl-2">
           <div
-            className="w-3 h-3 rounded-full bg-gray-400"
+            className="w-3 h-3 rounded-full bg-gray-300"
             style={{ transform: `scale(${strokeWidth / 10})` }}
           ></div>
           <input
@@ -287,66 +323,66 @@ export const BoardPage = () => {
           />
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 pl-1">
           <button
             onClick={() => {
               undo(socket.id as string);
               socket.emit("undo", { roomId, userId: socket.id });
             }}
-            className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg"
+            className="p-2.5 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors"
             title="Undo"
           >
-            <Undo size={20} />
+            <Undo size={18} />
           </button>
           <button
             onClick={() => {
               redo();
               socket.emit("redo", roomId);
             }}
-            className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg"
+            className="p-2.5 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors"
+            title="Redo"
           >
-            <Redo size={20} />
+            <Redo size={18} />
           </button>
           <button
             onClick={() => {
               clearBoard();
               socket.emit("clear-board", roomId);
             }}
-            className="p-2 text-red-400 hover:text-red-300 hover:bg-gray-700 rounded-lg"
+            className="p-2.5 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+            title="Clear Board"
           >
-            <Trash2 size={20} />
+            <Trash2 size={18} />
           </button>
 
-          {/* Vertical Divider */}
-          <div className="w-px h-8 bg-gray-600 mx-1 self-center"></div>
+          <div className="w-px h-8 bg-gray-700 mx-2 self-center"></div>
 
           <div className="relative flex items-center">
             <button
               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-              className={`p-2 rounded-lg transition-colors ${isExportMenuOpen ? "bg-gray-700 text-green-300" : "text-green-400 hover:text-green-300 hover:bg-gray-700"}`}
+              className={`p-2.5 rounded-lg transition-colors ${isExportMenuOpen ? "bg-gray-800 text-green-400" : "text-gray-400 hover:text-green-400 hover:bg-gray-800"}`}
               title="Export Options"
             >
-              <Download size={20} />
+              <Download size={18} />
             </button>
 
-            {/* The Floating Menu */}
             {isExportMenuOpen && (
-              <div className="absolute top-full mt-3 right-0 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col z-50 min-w-[140px]">
+              <div className="absolute top-full mt-4 right-0 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col z-50 min-w-[160px] backdrop-blur-xl">
                 <button
                   onClick={() => handleExport("png")}
-                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors border-b border-gray-700"
+                  className="px-4 py-3 text-sm font-medium text-left text-gray-300 hover:bg-gray-800 hover:text-white transition-colors border-b border-gray-800"
                 >
                   Export as PNG
                 </button>
                 <button
                   onClick={() => handleExport("jpg")}
-                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors border-b border-gray-700"
+                  className="px-4 py-3 text-sm font-medium text-left text-gray-300 hover:bg-gray-800 hover:text-white transition-colors border-b border-gray-800"
                 >
                   Export as JPG
                 </button>
                 <button
                   onClick={() => handleExport("pdf")}
-                  className="px-4 py-3 text-sm font-semibold text-left text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                  className="px-4 py-3 text-sm font-medium text-left text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
                 >
                   Export as PDF
                 </button>
@@ -357,20 +393,20 @@ export const BoardPage = () => {
       </div>
 
       {/* --- RIGHT PANEL (Users List) --- */}
-      <div className="absolute top-4 right-4 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-lg p-4 z-40">
-        <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-3 pb-2 border-b border-gray-700 flex items-center justify-between">
-          <span>Users in Room</span>
-          <span className="bg-blue-500/20 text-blue-400 text-s px-2 py-0.5 rounded-full">
+      <div className="absolute top-4 right-4 w-48 bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl p-4 z-40">
+        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3 pb-3 border-b border-gray-800 flex items-center justify-between">
+          <span>Participants</span>
+          <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">
             {roomUsers.length}
           </span>
         </h3>
         <ul className="flex flex-col gap-3">
           {roomUsers.map((user) => (
             <li key={user.id} className="flex items-center gap-3 text-white">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center font-bold text-sm">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-bold text-xs shadow-inner border border-white/10">
                 {user.username.charAt(0).toUpperCase()}
               </div>
-              <span className="text-sm font-semibold truncate">
+              <span className="text-sm font-medium truncate text-gray-200">
                 {user.username}
               </span>
             </li>
@@ -379,31 +415,31 @@ export const BoardPage = () => {
       </div>
 
       {/* --- BOTTOM RIGHT (Zoom Controls) --- */}
-      <div className="absolute bottom-6 right-6 flex items-center bg-gray-800 border border-gray-700 rounded-lg shadow-lg overflow-hidden z-40 text-gray-300">
+      <div className="absolute bottom-6 right-6 flex items-center bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-40 text-gray-400">
         <button
           onClick={handleZoomOut}
-          className="p-3 hover:bg-gray-700 hover:text-white transition-colors"
+          className="p-3 hover:bg-gray-800 hover:text-white transition-colors"
           title="Zoom Out"
         >
-          <ZoomOut size={20} />
+          <ZoomOut size={18} />
         </button>
-        <span className="px-3 font-mono text-sm w-16 text-center select-none">
+        <span className="px-2 font-mono text-xs w-14 text-center select-none text-gray-300">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={handleZoomIn}
-          className="p-3 hover:bg-gray-700 hover:text-white transition-colors"
+          className="p-3 hover:bg-gray-800 hover:text-white transition-colors"
           title="Zoom In"
         >
-          <ZoomIn size={20} />
+          <ZoomIn size={18} />
         </button>
-        <div className="w-px h-6 bg-gray-600 mx-1"></div>
+        <div className="w-px h-6 bg-gray-700 mx-1"></div>
         <button
           onClick={handleZoomReset}
-          className="p-3 hover:bg-gray-700 hover:text-white transition-colors"
+          className="p-3 hover:bg-gray-800 hover:text-white transition-colors"
           title="Reset Zoom"
         >
-          <Maximize size={18} />
+          <Maximize size={16} />
         </button>
       </div>
 
