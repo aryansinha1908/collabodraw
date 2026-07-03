@@ -12,7 +12,14 @@ import { boardsRouter } from "./routes/boards";
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"], // Explicitly allow Auth header for JWTs
+    credentials: true, // If you ever use cookies, this is mandatory
+  }),
+);
 app.use(express.json());
 
 app.use("/auth", authRouter);
