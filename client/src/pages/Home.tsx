@@ -4,7 +4,6 @@ import {
   LogOut,
   LayoutDashboard,
   ArrowRightLeft,
-  MousePointerClick,
   Palette,
   History,
   ShieldCheck,
