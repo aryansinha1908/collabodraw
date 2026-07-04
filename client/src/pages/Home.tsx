@@ -125,9 +125,14 @@ const SyncedTypingDemo = () => {
       {/* User A */}
       <div className="w-full md:w-1/3 flex flex-col gap-4">
         <div className="aspect-video bg-gray-900/80 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl flex items-center justify-center overflow-hidden">
-          <span className="text-gray-500 font-mono text-sm">
-            User A's Screen Video
-          </span>
+          <video
+            src="/userA.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full rounded-xl border border-gray-800"
+          />
         </div>
         {renderConsole(frameA, "text-blue-400")}
       </div>
@@ -139,9 +144,14 @@ const SyncedTypingDemo = () => {
       {/* User B */}
       <div className="w-full md:w-1/3 flex flex-col gap-4">
         <div className="aspect-video bg-gray-900/80 backdrop-blur-md rounded-xl border border-gray-700 shadow-2xl flex items-center justify-center overflow-hidden">
-          <span className="text-gray-500 font-mono text-sm">
-            User B's Screen Video
-          </span>
+          <video
+            src="/userB.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full rounded-xl border border-gray-800"
+          />
         </div>
         {renderConsole(frameB, "text-purple-400")}
       </div>
@@ -329,7 +339,7 @@ export const Home = () => {
           <div className="rounded-2xl border border-gray-700 bg-gray-900/40 p-2 backdrop-blur-xl shadow-2xl">
             {/* PLACEHOLDER: Video for Color/Stroke Width */}
             <video
-              src="/placeholder-color.mp4"
+              src="/customizations.mp4"
               autoPlay
               loop
               muted
@@ -369,12 +379,9 @@ export const Home = () => {
           </div>
           <div className="order-1 md:order-2 rounded-2xl border border-gray-700 bg-gray-900/40 p-2 backdrop-blur-xl shadow-2xl">
             {/* PLACEHOLDER: Video for Undo/Redo */}
-            <video
-              src="/placeholder-undo.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
+            <img
+              src="/canvasActions.png"
+              alt="Export Menu Options"
               className="w-full rounded-xl border border-gray-800"
             />
           </div>
@@ -391,7 +398,7 @@ export const Home = () => {
           <div className="rounded-2xl border border-gray-700 bg-gray-900/40 p-2 backdrop-blur-xl shadow-2xl">
             {/* PLACEHOLDER: Video for Collaboration Permissions */}
             <video
-              src="/placeholder-permissions.mp4"
+              src="/permissions.mp4"
               autoPlay
               loop
               muted
@@ -434,7 +441,7 @@ export const Home = () => {
           <div className="order-1 md:order-2 rounded-2xl border border-gray-700 bg-gray-900/40 p-2 backdrop-blur-xl shadow-2xl">
             {/* PLACEHOLDER: Video for Toasts */}
             <video
-              src="/placeholder-toasts.mp4"
+              src="/notifications.mp4"
               autoPlay
               loop
               muted
@@ -455,7 +462,7 @@ export const Home = () => {
           <div className="rounded-2xl border border-gray-700 bg-gray-900/40 p-2 backdrop-blur-xl shadow-2xl">
             {/* PLACEHOLDER: Image for Export Options */}
             <img
-              src="/placeholder-export.png"
+              src="/exports.png"
               alt="Export Menu Options"
               className="w-full rounded-xl border border-gray-800"
             />
@@ -481,12 +488,12 @@ export const Home = () => {
             <img
               src="/favicon-32x32.png"
               alt="CollaboDraw Logo"
-              className="w-4 h-4 rounded-sm grayscale opacity-50"
+              className="w-4 h-3 rounded-sm grayscale opacity-50"
             />
             <span className="font-semibold text-gray-300">CollaboDraw</span>
           </div>
           <p>
-            © {new Date().getFullYear()} Built for the HackSphere. All rights
+            © {new Date().getFullYear()} Built for HackSphere. All rights
             reserved.
           </p>
           <div className="flex gap-4">
