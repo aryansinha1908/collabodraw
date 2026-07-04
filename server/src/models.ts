@@ -29,12 +29,12 @@ const ElementSchema = new mongoose.Schema(
 // Board schema to contain the elements
 const BoardSchema = new mongoose.Schema(
   {
-    boardId: { type: String, required: true, unique: true }, // The 6-char link
-    title: { type: String, required: true, default: "Untitled Board" },
-    ownerId: { type: String, required: true }, // Links to the User who created it
+    boardId: { type: String, required: true, unique: true },
+    title: { type: String, default: "Untitled Board" },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // <-- THIS IS MANDATORY
     maxUsers: { type: Number, default: 10 },
     isPrivate: { type: Boolean, default: false },
-    elements: [ElementSchema],
+    elements: { type: Array, default: [] },
   },
   { timestamps: true },
 );

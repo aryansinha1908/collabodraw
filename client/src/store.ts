@@ -29,8 +29,20 @@ interface BoardState {
 
   zoom: number;
   setZoom: (zoom: number) => void;
-  roomUsers: { id: string; username: string }[];
-  setRoomUsers: (users: { id: string; username: string }[]) => void;
+  roomUsers: {
+    id: string;
+    username: string;
+    isOwner: boolean;
+    canEdit: boolean;
+  }[];
+  setRoomUsers: (
+    users: {
+      id: string;
+      username: string;
+      isOwner: boolean;
+      canEdit: boolean;
+    }[],
+  ) => void;
 
   offsetX: number;
   offsetY: number;

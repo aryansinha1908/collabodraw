@@ -49,14 +49,14 @@ boardsRouter.post("/", requireAuth, async (req: any, res) => {
       }
     }
 
-    const newBoard = await Board.create({
+    const newBoard = new Board({
       boardId,
-      title: title || "My Whiteboard",
+      title: req.body.title,
+      maxUsers: req.body.maxUsers,
+      isPrivate: req.body.isPrivate,
       ownerId: req.user.userId,
-      maxUsers: maxUsers || 10,
-      isPrivate: isPrivate || false,
-      elements: [],
     });
+    await newBoard.save();
 
     res.status(201).json(newBoard);
   } catch (error) {

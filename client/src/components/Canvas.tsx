@@ -4,6 +4,7 @@ import { useBoardStore } from "../store";
 import type { CanvasElement } from "../types";
 import { useParams } from "react-router-dom";
 import { socket } from "../socket";
+import toast from "react-hot-toast";
 
 export const Canvas: React.FC = () => {
   const lastCursorEmit = useRef<number>(0);
@@ -184,6 +185,19 @@ export const Canvas: React.FC = () => {
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
+
+    // --- NEW: Security Check ---
+    const roomUsers = useBoardStore.getState().roomUsers;
+    const currentUser = roomUsers.find((u: any) => u.id === socket.id);
+    const canIEdit = currentUser?.isOwner || currentUser?.canEdit || false;
+
+    if (!canIEdit) {
+      toast.error("You are in view-only mode. Ask the owner for edit access.", {
+        id: "view-only-toast",
+      });
+      return; // Instantly block the draw event
+    }
+    // ---------------------------
 
     const { x, y } = getCoordinates(e);
     setIsDrawing(true);
