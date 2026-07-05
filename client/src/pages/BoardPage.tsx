@@ -23,6 +23,8 @@ import {
   Download,
   Eye,
   Shield,
+  Copy,
+  Link,
 } from "lucide-react";
 
 export const BoardPage = () => {
@@ -332,8 +334,78 @@ export const BoardPage = () => {
     setIsExportMenuOpen(false);
   };
 
+  // --- NEW: Sharing Handlers ---
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}/board/${roomId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Invite link copied to clipboard!", {
+      style: {
+        background: "#1f2937",
+        color: "#fff",
+        border: "1px solid #374151",
+      },
+    });
+    setIsSidebarOpen(false); // Close sidebar automatically after copying
+  };
+
+  const handleCopyId = () => {
+    if (!roomId) return;
+    navigator.clipboard.writeText(roomId);
+    toast.success("Room ID copied!", {
+      style: {
+        background: "#1f2937",
+        color: "#fff",
+        border: "1px solid #374151",
+      },
+    });
+    setIsSidebarOpen(false); // Close sidebar automatically after copying
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Safety Check: Don't trigger shortcuts if user is typing in an input field
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      // 2. Zoom Controls (+, =, -)
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        setZoom(Math.min(useBoardStore.getState().zoom + 0.1, 3));
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setZoom(Math.max(useBoardStore.getState().zoom - 0.1, 0.1));
+      }
+
+      // 3. Tool Selection (1-6)
+      const toolsMap: Record<string, any> = {
+        "1": "hand",
+        "2": "pen",
+        "3": "eraser",
+        "4": "rect",
+        "5": "circle",
+        "6": "line",
+      };
+
+      if (toolsMap[e.key]) {
+        // Prevent default so browser doesn't do weird things
+        e.preventDefault();
+
+        const requestedTool = toolsMap[e.key];
+
+        // Security check: Viewers can ONLY select the hand tool (1)
+        if (requestedTool !== "hand" && !canIEdit) {
+          return;
+        }
+
+        setTool(requestedTool);
+      }
+
+      // 4. Undo/Redo Logic (Existing)
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "z" && !e.shiftKey) {
           e.preventDefault();
@@ -346,9 +418,10 @@ export const BoardPage = () => {
         }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [roomId, undo, redo]);
+  }, [roomId, undo, redo, setTool, setZoom, canIEdit]); // <-- Updated dependencies!
 
   return (
     <div
@@ -376,7 +449,7 @@ export const BoardPage = () => {
       {/* --- LEFT SIDEBAR --- */}
       <div
         onMouseLeave={() => setIsSidebarOpen(false)}
-        className={`absolute top-4 left-4 h-[calc(100vh-2rem)] w-64 bg-gray-900/60 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl flex flex-col justify-between transform transition-all duration-300 z-50 overflow-hidden ${isSidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-[120%] opacity-0"}`}
+        className={`absolute top-4 left-4 h-fit w-64 bg-gray-900/60 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl flex flex-col transform transition-all duration-300 z-50 overflow-hidden ${isSidebarOpen ? "translate-x-0 opacity-100" : "-translate-x-[120%] opacity-0"}`}
       >
         <div>
           <div className="flex justify-between items-center p-6 border-b border-gray-700/50 bg-gray-900/20">
@@ -392,11 +465,50 @@ export const BoardPage = () => {
           <div className="p-4 flex flex-col gap-2">
             <button
               onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+              className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
             >
               <Home size={18} />{" "}
               <span className="font-semibold text-sm">Dashboard</span>
             </button>
+
+            {/* --- NEW: Share Section --- */}
+            <div className="mt-2 pt-4 border-t border-gray-700/50">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 mb-3 block">
+                Share Workspace
+              </span>
+
+              <button
+                onClick={handleCopyId}
+                className="flex items-center justify-between w-full p-3 rounded-xl text-gray-300 hover:bg-gray-800 hover:text-white transition-colors group"
+                title="Copy Room ID"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-500/10 text-blue-400 p-1.5 rounded-lg group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                    <Copy size={16} />
+                  </div>
+                  <div className="flex flex-col items-start">
+                    <span className="font-semibold text-sm leading-tight">
+                      Copy Room ID
+                    </span>
+                    <span className="text-[10px] text-gray-500 font-mono group-hover:text-gray-400 transition-colors">
+                      {roomId}
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-3 w-full p-3 mt-1 rounded-xl text-gray-300 hover:bg-gray-800 hover:text-white transition-colors group"
+                title="Copy Invite Link"
+              >
+                <div className="bg-purple-500/10 text-purple-400 p-1.5 rounded-lg group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                  <Link size={16} />
+                </div>
+                <span className="font-semibold text-sm">Copy Invite Link</span>
+              </button>
+            </div>
+            {/* --------------------------- */}
           </div>
         </div>
         <div className="p-4 border-t border-gray-700/50 bg-gray-900/20">
@@ -416,47 +528,66 @@ export const BoardPage = () => {
         <div className="flex gap-1.5 border-r border-gray-700 pr-4">
           <button
             onClick={() => setTool("hand")}
-            className={`p-2.5 rounded-lg transition-colors ${currentTool === "hand" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-            title="Pan Tool"
+            className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "hand" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+            title="Pan Tool (1)"
           >
             <Hand size={18} />
+            <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+              1
+            </span>
           </button>
+
           {canIEdit && (
             <>
               <button
                 onClick={() => setTool("pen")}
-                className={`p-2.5 rounded-lg transition-colors ${currentTool === "pen" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-                title="Pen"
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "pen" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Pen (2)"
               >
                 <Pen size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  2
+                </span>
               </button>
               <button
                 onClick={() => setTool("eraser")}
-                className={`p-2.5 rounded-lg transition-colors ${currentTool === "eraser" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-                title="Eraser"
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "eraser" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Eraser (3)"
               >
                 <Eraser size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  3
+                </span>
               </button>
               <button
                 onClick={() => setTool("rect")}
-                className={`p-2.5 rounded-lg transition-colors ${currentTool === "rect" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-                title="Rectangle"
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "rect" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Rectangle (4)"
               >
                 <Square size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  4
+                </span>
               </button>
               <button
                 onClick={() => setTool("circle")}
-                className={`p-2.5 rounded-lg transition-colors ${currentTool === "circle" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-                title="Circle"
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "circle" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Circle (5)"
               >
                 <Circle size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  5
+                </span>
               </button>
               <button
                 onClick={() => setTool("line")}
-                className={`p-2.5 rounded-lg transition-colors ${currentTool === "line" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
-                title="Line"
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "line" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Line (6)"
               >
                 <Minus size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  6
+                </span>
               </button>
             </>
           )}

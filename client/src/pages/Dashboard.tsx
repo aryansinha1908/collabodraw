@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import { motion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +14,8 @@ import {
   Layout,
   LogOut,
   Loader2,
+  Copy,
+  Link,
 } from "lucide-react";
 
 // Using the exact API URL logic from your source
@@ -107,6 +110,31 @@ export const Dashboard = () => {
     navigate("/");
   };
 
+  // --- NEW: Sharing Handlers ---
+  const handleCopyLink = (boardId: string) => {
+    // Dynamically builds the full URL based on where the app is hosted
+    const url = `${window.location.origin}/board/${boardId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Invite link copied to clipboard!", {
+      style: {
+        background: "#1f2937",
+        color: "#fff",
+        border: "1px solid #374151",
+      },
+    });
+  };
+
+  const handleCopyId = (boardId: string) => {
+    navigator.clipboard.writeText(boardId);
+    toast.success("Room ID copied!", {
+      style: {
+        background: "#1f2937",
+        color: "#fff",
+        border: "1px solid #374151",
+      },
+    });
+  };
+
   // Framer Motion Animation Variants
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
@@ -120,6 +148,7 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white relative font-sans overflow-x-hidden">
+      <Toaster position="bottom-right" />
       {/* Background Grid */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f2937_1px,transparent_1px),linear-gradient(to_bottom,#1f2937_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20 pointer-events-none fixed"></div>
 
@@ -352,35 +381,54 @@ export const Dashboard = () => {
                         )}{" "}
                       </div>
 
+                      {/* Interactive ID Badge */}
                       <div className="flex items-center gap-2 mb-4">
-                        <span className="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded border border-gray-700 font-mono">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyId(board.boardId);
+                          }}
+                          className="group/id flex items-center gap-1.5 text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded border border-gray-700 hover:border-gray-500 font-mono transition-colors"
+                          title="Copy Room ID"
+                        >
                           ID:{" "}
-                          <span className="text-blue-400">{board.boardId}</span>
-                        </span>
+                          <span className="text-blue-400 group-hover/id:text-blue-300">
+                            {board.boardId}
+                          </span>
+                          <Copy
+                            size={12}
+                            className="opacity-0 group-hover/id:opacity-100 transition-opacity"
+                          />
+                        </button>
                       </div>
 
                       {/* Action Footer */}
-                      <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-800/50">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <Users size={14} />
-                          <span>Max {board.maxUsers}</span>
-                        </div>
+                      <div className="flex gap-2">
+                        {/* NEW: Copy Link Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyLink(board.boardId);
+                          }}
+                          className="p-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded transition-colors border border-gray-700"
+                          title="Copy full invite link"
+                        >
+                          <Link size={16} />
+                        </button>
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => navigate(`/board/${board.boardId}`)}
-                            className="px-3 py-1.5 text-xs font-medium bg-gray-800 hover:bg-blue-600 text-gray-300 hover:text-white rounded transition-colors"
-                          >
-                            Enter
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBoard(board.boardId)}
-                            className="p-1.5 bg-transparent hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded transition-colors"
-                            title="Delete Board"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => navigate(`/board/${board.boardId}`)}
+                          className="px-3 py-1.5 text-xs font-medium bg-gray-800 hover:bg-blue-600 text-gray-300 hover:text-white rounded transition-colors"
+                        >
+                          Enter
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBoard(board.boardId)}
+                          className="p-1.5 bg-transparent hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded transition-colors"
+                          title="Delete Board"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
                   </motion.div>
