@@ -247,7 +247,7 @@ export const Dashboard = () => {
                   </div>
                   <input
                     type="range"
-                    min="2"
+                    min="1"
                     max="50"
                     value={newMaxUsers}
                     onChange={(e) => setNewMaxUsers(Number(e.target.value))}
@@ -381,7 +381,7 @@ export const Dashboard = () => {
                         )}{" "}
                       </div>
 
-                      {/* Interactive ID Badge */}
+                      {/* Interactive ID Badge & User Limit */}
                       <div className="flex items-center gap-2 mb-4">
                         <button
                           onClick={(e) => {
@@ -400,6 +400,14 @@ export const Dashboard = () => {
                             className="opacity-0 group-hover/id:opacity-100 transition-opacity"
                           />
                         </button>
+
+                        {/* NEW: Max Users Badge */}
+                        <span
+                          className="flex items-center gap-1.5 text-xs px-2 py-1 bg-gray-800/50 text-gray-500 rounded border border-gray-700/50 font-mono"
+                          title={`Maximum ${board.maxUsers} participants allowed`}
+                        >
+                          <Users size={12} /> {board.maxUsers}
+                        </span>
                       </div>
 
                       {/* Action Footer */}

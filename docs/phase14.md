@@ -16,3 +16,8 @@
 
 - **Workspace Details Panel:** Transformed the Board Page's left sidebar from a simple navigation menu into a fully-fledged workspace management panel, complete with stylized "Share Workspace" actions.
 - **Responsive Height Optimization:** Refactored the sidebar's CSS architecture (replacing hardcoded viewport calculations with `h-fit`) to tightly wrap its contents. This eliminated wasted screen space and vastly improved the mouse travel ergonomics for the "Exit Room" button.
+
+### 4. Room Capacity Enforcement
+
+- **Real-Time Connection Limits:** Implemented backend validation in Socket.io to evaluate the active WebSocket room size against the database's `maxUsers` limit, securely intercepting and rejecting join requests if the board is at full capacity.
+- **Capacity Visibility:** Updated the Dashboard UI to display a participant limit badge on each board card, providing users with clear, at-a-glance visibility into their workspace restrictions before attempting to join or share.

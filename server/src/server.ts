@@ -113,9 +113,16 @@ io.on("connection", (socket) => {
           "Board not found. Please check the link.",
         );
 
-      const currentRoomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
-      if (currentRoomSize >= board.maxUsers)
-        return socket.emit("join-error", "Board is at maximum capacity.");
+      const room = io.sockets.adapter.rooms.get(roomId);
+      const currentUsersCount = room ? room.size : 0;
+
+      if (currentUsersCount >= board.maxUsers && !room?.has(socket.id)) {
+        socket.emit(
+          "join-error",
+          `This board has reached its maximum limit of ${board.maxUsers} participants.`,
+        );
+        return; // Block them from joining!
+      }
 
       const isOwner =
         board.ownerId &&
