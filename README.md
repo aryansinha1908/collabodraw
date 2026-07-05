@@ -1,102 +1,320 @@
+<div align="center">
+
 # CollaboDraw
 
-**A high-performance, real-time collaborative whiteboard built for seamless remote brainstorming, system design, and interactive learning.**
+### A modern real-time collaborative whiteboard built with the MERN stack
 
-CollaboDraw allows multiple users to join a shared workspace, sketch ideas, and see updates instantly across all connected devices. Built with a focus on low-latency synchronization and responsive design, it provides a fluid experience on desktops, tablets, and mobile phones.
+Sketch ideas, brainstorm with your team, and collaborate seamlessly through low-latency real-time synchronization.
 
----
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)]()
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-010101?logo=socketdotio)]()
+[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)]()
+[![Express](https://img.shields.io/badge/Express-black?logo=express)]()
+[![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)]()
 
-## Key Features
+### Live Demo
 
-### Core Collaboration
+**[Visit Website](https://collabodraw-frontend.vercel.app/)**
 
-- **Real-Time Synchronization:** Instantaneous drawing updates across all connected clients via Socket.io.
-- **Live Presence:** View active user counts, live participant names, and synchronized real-time cursors.
-- **Persistent Workspaces:** All board states are automatically saved to MongoDB. Drop off and rejoin at any time without losing your work.
-- **Multi-Device Support:** Fully responsive canvas utilizing the modern Pointer Events API to natively support desktop mice, mobile touchscreens, and styluses simultaneously.
-
-### Drawing & Canvas Engine
-
-- **Dynamic Tools:** Freehand pen, straight lines, rectangles, circles, and an eraser.
-- **Granular Control:** Custom color picker and adjustable stroke width settings.
-- **Infinite Panning:** Middle-mouse or Hand-tool panning to navigate large diagrams.
-- **Multiplayer Undo/Redo:** Intelligent history stacks that safely isolate and revert your specific actions without deleting your teammates' active strokes.
-
-### Professional Workflows
-
-- **Secure Authentication:** JWT-based user registration and protected board creation.
-- **Frictionless Sharing:** Invite collaborators instantly using shareable 6-character board IDs.
-- **Keyboard Shortcuts:** Rapid-fire `Ctrl+Z` (Undo) and `Ctrl+Y` (Redo) support for power users.
-- **Multi-Format Export:** Download high-resolution snapshots of your board in PNG, JPG, or PDF formats.
+</div>
 
 ---
 
-## System Architecture
+# Preview
 
-CollaboDraw utilizes a split-deployment architecture to maximize edge-delivery speeds while maintaining persistent WebSocket connections.
+## Landing Page
 
-- **Frontend (Vercel):** React, TypeScript, Vite, and Zustand. Hosted on Vercel's edge network for lightning-fast static asset delivery and SPA routing.
-- **Backend (Render):** Node.js, Express, and Socket.io. Hosted on Render to support the long-lived, persistent container environments required for uninterrupted WebSocket syncing.
-- **Database (MongoDB Atlas):** NoSQL document storage for persistent board elements and user credentials.
-
-### Event Synchronization Model
-
-To protect server resources, the app categorizes network events:
-
-1. **Transient Events (Memory/Socket):** `draw-start`, `draw-move`, `cursor-move`. These are broadcasted directly peer-to-peer via the server for live previews and are throttled (50ms intervals) to prevent network flooding.
-2. **Persistent Events (Database):** `draw-end`, `clear-board`, `undo`. These trigger asynchronous MongoDB updates to ensure the permanent board record remains pristine.
+![Landing Page](./assets/landing-page.png)
 
 ---
 
-## Technical Challenges Conquered
+## Dashboard
 
-- **The Canvas Wipe Bug:** HTML5 `<canvas>` elements natively clear their context upon window resize. Fixed by binding window dimensions to React state with a debounced listener, forcing an automatic React re-render of the history stack in milliseconds.
-- **WebSocket Flooding:** Uncapped `onMouseMove` events were generating 600+ network requests per second per user. Implemented a timestamp delta throttle to cap emissions, reducing network load by 80% while maintaining visual fluidity.
-- **Targeted History Deletion:** Standard `pop()` array methods would delete the absolute latest element drawn in the room, breaking multiplayer undo. Engineered a custom backend splice function to locate and isolate only the requesting user's latest stroke index.
+![Dashboard](./assets/dashboard.png)
 
 ---
 
-## Local Development Setup
+## Collaborative Whiteboard
 
-**1. Clone the repository**
+![Whiteboard](./assets/whiteboard.png)
 
-```bash
-git clone [https://github.com/yourusername/collabodraw.git](https://github.com/yourusername/collabodraw.git)
+---
+
+# Why CollaboDraw?
+
+CollaboDraw is a real-time collaborative whiteboard designed for brainstorming, software design, teaching, and remote teamwork.
+
+Unlike traditional CRUD applications, CollaboDraw focuses on solving the engineering challenges behind real-time collaboration—maintaining synchronized canvas state, handling concurrent users, managing live cursor presence, and delivering a smooth collaborative experience across multiple devices.
+
+---
+
+# Features
+
+## Real-Time Collaboration
+
+Collaborate seamlessly with multiple users on the same board. Every drawing action is synchronized instantly across all connected participants using WebSockets.
+
+---
+
+## Powerful Drawing Tools
+
+Draw freely using:
+
+- Freehand Pen
+- Straight Lines
+- Rectangles
+- Circles
+- Eraser
+
+Customize every stroke with adjustable colors and stroke widths.
+
+---
+
+## Live Presence
+
+See who is currently connected to your board.
+
+- Live collaborator list
+- Cursor presence
+- Active participant count
+- Presence notifications
+
+---
+
+## Role-Based Collaboration
+
+Every board supports three permission levels:
+
+- Owner
+- Editor
+- Viewer
+
+Owners can approve join requests and control who can modify the board in real time.
+
+---
+
+## Persistent Boards
+
+Boards are automatically saved.
+
+Leave anytime and continue exactly where you left off.
+
+---
+
+## Infinite Canvas
+
+Navigate naturally using smooth pan and zoom controls.
+
+Perfect for large diagrams and brainstorming sessions.
+
+---
+
+## ↩ Undo / Redo
+
+Made a mistake?
+
+Undo and redo recent drawing actions using:
+
+- Toolbar controls
+- Keyboard shortcuts
+
+---
+
+## Export
+
+Export your whiteboard as a PNG, JPG, and PDF with a single click.
+
+---
+
+## Responsive Design
+
+Built for:
+
+- Desktop
+- Tablet
+- Mobile
+
+Pointer Events ensure consistent interaction across devices.
+
+---
+
+# Tech Stack
+
+| Layer                   | Technology              |
+| ----------------------- | ----------------------- |
+| Frontend                | React, TypeScript, Vite |
+| Styling                 | Tailwind CSS            |
+| State Management        | Zustand                 |
+| Backend                 | Node.js, Express        |
+| Database                | MongoDB                 |
+| Real-Time Communication | Socket.IO               |
+| Authentication          | JWT                     |
+| Deployment              | Vercel + Render         |
+
+---
+
+# Architecture
+
+```
+                 React + Zustand
+                        │
+          REST API + Socket.IO
+                        │
+                 Express Backend
+                        │
+                   MongoDB Atlas
 ```
 
-2. Setup the backend
+---
+
+# Project Structure
+
+```
+collabodraw/
+│
+├── client/
+│   ├── components/
+│   ├── hooks/
+│   ├── pages/
+│   ├── store/
+│   └── utils/
+│
+├── server/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── models/
+│   ├── routes/
+│   ├── sockets/
+│   └── utils/
+│
+└── README.md
+```
+
+---
+
+# Engineering Highlights
+
+During development, several architectural and engineering challenges were addressed.
+
+### Real-Time Synchronization
+
+- Low-latency Socket.IO communication
+- Room-based collaboration
+- Live cursor synchronization
+- Multi-user drawing
+
+---
+
+### Performance Optimizations
+
+- Cursor throttling
+- Debounced canvas resizing
+- Efficient canvas rendering
+- Reduced unnecessary network traffic
+
+---
+
+### Authentication & Security
+
+- JWT authentication
+- Protected API routes
+- Socket authentication
+- Role-based access control
+
+---
+
+### User Experience
+
+- Responsive layout
+- Infinite canvas
+- Keyboard shortcuts
+- Presence notifications
+- Loading & error states
+
+---
+
+# Getting Started
+
+## Clone the repository
 
 ```bash
-cd collabodraw-server
+git clone https://github.com/aryansinha1908/collabodraw.git
+```
+
+---
+
+## Install dependencies
+
+### Frontend
+
+```bash
+cd client
 npm install
 ```
 
-Create a .env file in the server directory:
-Code snippet:-
-
-```
-PORT=3001
-MONGODB_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-CLIENT_URL=<http://localhost:5173>
-```
-
-Start the server: `npm run dev`
-
-3. Setup the Frontend
+### Backend
 
 ```bash
-cd ../collabodraw-frontend
+cd server
 npm install
 ```
 
-Create a .env file in the frontend directory:
-Code snippet:-
+---
 
+## Environment Variables
+
+### Client
+
+```env
+VITE_SERVER_URL=
 ```
-VITE_BACKEND_URL=<http://localhost:3001>
+
+### Server
+
+```env
+PORT=
+MONGO_URI=
+JWT_SECRET=
+CLIENT_URL=
 ```
 
-Start the client: `npm run dev`
+---
 
-Built with ❤️ for [HackSphere]
+## Start development
+
+Backend
+
+```bash
+npm run dev
+```
+
+Frontend
+
+```bash
+npm run dev
+```
+
+---
+
+# Roadmap
+
+Planned improvements after the hackathon:
+
+- [ ] Shape selection & manipulation
+- [ ] Text tool
+- [ ] Image uploads
+- [ ] Board snapshots / version history
+- [ ] Sticky notes
+- [ ] Multiple board pages
+- [ ] Laser pointer
+
+---
+
+<div align="center">
+
+### Built for HackSphere 2026 ❤️
+
+**Designed & Developed by Aryan Sinha**
+
+</div>
