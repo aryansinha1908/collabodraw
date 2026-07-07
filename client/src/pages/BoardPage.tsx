@@ -45,7 +45,7 @@ export const BoardPage = () => {
     remoteUndo,
     remoteRedo,
     remoteClear,
-    token,
+    isAuthenticated,
     zoom,
     setZoom,
     roomUsers,
@@ -60,12 +60,11 @@ export const BoardPage = () => {
   const canIEdit = me?.isOwner || me?.canEdit || false;
 
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       navigate("/");
       return;
     }
 
-    socket.auth = { token };
     let connectToastId: string;
 
     socket.on("connect_error", (err) => {
@@ -287,7 +286,6 @@ export const BoardPage = () => {
     };
   }, [
     roomId,
-    token,
     navigate,
     remoteUndo,
     remoteRedo,

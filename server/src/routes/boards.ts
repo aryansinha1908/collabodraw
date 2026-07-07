@@ -1,26 +1,12 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { Board } from "../models";
+import authMiddleware from "../middlewares/auth";
 
 export const boardsRouter = express.Router();
 
-// Quick middleware to protect these routes
-const requireAuth = (req: any, res: any, next: any) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const secret =
-      process.env.JWT_SECRET || "super_secret_hackathon_key_change_later";
-    req.user = jwt.verify(token, secret); // Attach user data to request
-    next();
-  } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
-  }
-};
-
 // GET: Fetch all boards for the logged-in user's dashboard
-boardsRouter.get("/my-boards", requireAuth, async (req: any, res) => {
+boardsRouter.get("/my-boards", authMiddleware, async (req: any, res) => {
   try {
     const boards = await Board.find({ ownerId: req.user.userId }).sort({
       createdAt: -1,
@@ -32,7 +18,7 @@ boardsRouter.get("/my-boards", requireAuth, async (req: any, res) => {
 });
 
 // POST: Create a new board with settings
-boardsRouter.post("/", requireAuth, async (req: any, res) => {
+boardsRouter.post("/", authMiddleware, async (req: any, res) => {
   try {
     const { title, maxUsers, isPrivate } = req.body;
 
@@ -49,11 +35,13 @@ boardsRouter.post("/", requireAuth, async (req: any, res) => {
       }
     }
 
+    // console.log(req.user);
+
     const newBoard = new Board({
       boardId,
-      title: req.body.title,
-      maxUsers: req.body.maxUsers,
-      isPrivate: req.body.isPrivate,
+      title,
+      maxUsers,
+      isPrivate,
       ownerId: req.user.userId,
     });
     await newBoard.save();
@@ -65,12 +53,12 @@ boardsRouter.post("/", requireAuth, async (req: any, res) => {
 });
 
 // DELETE: Delete a board (only if you own it)
-boardsRouter.delete("/:boardId", requireAuth, async (req: any, res) => {
+boardsRouter.delete("/:boardId", authMiddleware, async (req: any, res) => {
   try {
     const board = await Board.findOne({ boardId: req.params.boardId });
     if (!board) return res.status(404).json({ error: "Board not found" });
 
-    if (board.ownerId !== req.user.userId) {
+    if (board.ownerId?.toString() !== req.user.userId?.toString()) {
       return res.status(403).json({ error: "You do not own this board" });
     }
 

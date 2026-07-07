@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, User, ArrowLeft, Loader2 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -33,6 +33,7 @@ export const Auth: React.FC = () => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -42,7 +43,7 @@ export const Auth: React.FC = () => {
         throw new Error(data.error || "Authentication failed");
       }
 
-      setAuth(data.token, data.username);
+      setAuth(true, data.username);
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.message);

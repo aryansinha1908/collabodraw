@@ -161,7 +161,7 @@ const SyncedTypingDemo = () => {
 
 export const Home = () => {
   const navigate = useNavigate();
-  const { token, username, logout } = useBoardStore();
+  const { isAuthenticated, username, logout } = useBoardStore();
 
   const handleCtaClick = () => {
     navigate("/dashboard");
@@ -204,7 +204,7 @@ export const Home = () => {
         </div>
 
         <div className="flex gap-4 items-center">
-          {token ? (
+          {isAuthenticated ? (
             <>
               <span className="text-sm font-medium text-gray-400 hidden md:block mr-2">
                 Welcome, {username}
@@ -265,7 +265,9 @@ export const Home = () => {
             onClick={handleCtaClick}
             className="px-8 py-4 text-lg font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg hover:shadow-blue-500/25 transition-all transform hover:-translate-y-0.5"
           >
-            {token ? "Go to your Dashboard" : "Start drawing — it's free"}
+            {isAuthenticated
+              ? "Go to your Dashboard"
+              : "Start drawing — it's free"}
           </button>
         </motion.div>
 

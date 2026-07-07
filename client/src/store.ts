@@ -9,9 +9,9 @@ interface BoardState {
   strokeColor: string;
   strokeWidth: number;
 
-  token: string | null;
+  isAuthenticated: boolean;
   username: string | null;
-  setAuth: (token: string | null, username: string | null) => void;
+  setAuth: (isAuthenticated: boolean, username: string | null) => void;
   logout: () => void;
 
   // Local Actions
@@ -57,28 +57,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   strokeColor: "#ffffff",
   strokeWidth: 3,
 
-  token: localStorage.getItem("draw_token"),
-  username: localStorage.getItem("draw_username"),
+  isAuthenticated: false,
+  username: null,
 
-  setAuth: (token, username) => {
-    if (token && username) {
-      localStorage.setItem("draw_token", token);
-      localStorage.setItem("draw_username", username);
-    }
-    set({ token, username });
-  },
+  setAuth: (isAuthenticated, username) => set({ isAuthenticated, username }),
 
-  logout: () => {
-    localStorage.removeItem("draw_token");
-    localStorage.removeItem("draw_username");
-    set({
-      token: null,
-      username: null,
-      elements: [],
-      undoStack: [],
-      redoStack: [],
-    });
-  },
+  logout: () => set({ isAuthenticated: false, username: null }),
 
   setTool: (tool) => set({ currentTool: tool }),
   setColor: (color) => set({ strokeColor: color }),

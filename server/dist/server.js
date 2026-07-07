@@ -13,6 +13,8 @@ const models_1 = require("./models");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_1 = require("./routes/auth");
 const boards_1 = require("./routes/boards");
+const cookie_1 = __importDefault(require("cookie"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
@@ -22,6 +24,7 @@ app.use((0, cors_1.default)({
     credentials: true,
 }));
 app.use(express_1.default.json());
+app.use((0, cookie_parser_1.default)());
 app.use("/auth", auth_1.authRouter);
 app.use("/boards", boards_1.boardsRouter);
 const server = http_1.default.createServer(app);
@@ -29,6 +32,7 @@ const io = new socket_io_1.Server(server, {
     cors: {
         origin: process.env.CLIENT_URL || "http://localhost:5173",
         methods: ["GET", "POST"],
+        credentials: true,
     },
 });
 mongoose_1.default
@@ -37,17 +41,20 @@ mongoose_1.default
     .catch((err) => console.error("MongoDB connection error:", err));
 const roomUsers = new Map();
 io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token)
-        return next(new Error("Authentication error: No token provided"));
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || "aryansinha1908");
-        socket.data.username = decoded.username;
-        socket.data.userId = decoded.userId || decoded.id || decoded._id;
+        const rawCookies = socket.handshake.headers.cookie;
+        if (!rawCookies)
+            return next(new Error("Authentication error"));
+        const parsedCookies = cookie_1.default.parseCookie(rawCookies);
+        const token = parsedCookies.draw_token;
+        if (!token)
+            return next(new Error("Authentication error"));
+        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        socket.data.user = decoded;
         next();
     }
     catch (err) {
-        next(new Error("Authentication error: Invalid token"));
+        next(new Error("Authentication error"));
     }
 });
 // Upgraded to extract permission states from the socket objects
@@ -56,10 +63,10 @@ const getRoomUsers = (roomId) => {
     const socketIds = roomUsers.get(roomId) || new Set();
     for (const id of socketIds) {
         const socket = io.sockets.sockets.get(id);
-        if (socket && socket.data.username) {
+        if (socket && socket.data.user?.username) {
             users.push({
                 id,
-                username: socket.data.username,
+                username: socket.data.user.username, // <-- FIXED
                 isOwner: socket.data.isOwner || false,
                 canEdit: socket.data.canEdit || false,
             });
@@ -84,7 +91,9 @@ io.on("connection", (socket) => {
     };
     socket.on("join-room", async (roomId) => {
         try {
+            const currentUser = socket.data.user;
             const board = await models_1.Board.findOne({ boardId: roomId });
+            // console.log(currentUser, board);
             if (!board)
                 return socket.emit("join-error", "Board not found. Please check the link.");
             const room = io.sockets.adapter.rooms.get(roomId);
@@ -93,9 +102,7 @@ io.on("connection", (socket) => {
                 socket.emit("join-error", `This board has reached its maximum limit of ${board.maxUsers} participants.`);
                 return; // Block them from joining!
             }
-            const isOwner = board.ownerId &&
-                socket.data.userId &&
-                board.ownerId.toString() === socket.data.userId.toString();
+            const isOwner = board.ownerId?.toString() === currentUser.userId?.toString();
             // --- PRIVATE BOARD INTERCEPTION ---
             if (board.isPrivate && !isOwner) {
                 const room = roomUsers.get(roomId);
@@ -117,7 +124,7 @@ io.on("connection", (socket) => {
                 socket.emit("waiting-approval");
                 io.to(ownerSocketId).emit("join-request", {
                     socketId: socket.id,
-                    username: socket.data.username,
+                    username: currentUser.username,
                     roomId,
                 });
                 return;
@@ -199,10 +206,10 @@ io.on("connection", (socket) => {
     socket.on("redo", (roomId) => socket.to(roomId).emit("redo"));
     socket.on("cursor-move", ({ roomId, x, y }) => {
         socket.to(roomId).emit("cursor-move", {
-            userId: socket.id,
+            userId: socket.data.user.userId,
             x,
             y,
-            username: socket.data.username,
+            username: socket.data.user?.username,
         });
     });
     socket.on("disconnect", async () => {

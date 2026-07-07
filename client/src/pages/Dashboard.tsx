@@ -19,12 +19,12 @@ import {
 } from "lucide-react";
 
 // Using the exact API URL logic from your source
-const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export const Dashboard = () => {
   // Application State
   const navigate = useNavigate();
-  const { token, username, logout } = useBoardStore();
+  const { isAuthenticated, username, logout } = useBoardStore();
 
   // Component State
   const [joinId, setJoinId] = useState("");
@@ -38,14 +38,16 @@ export const Dashboard = () => {
   const [newIsPrivate, setNewIsPrivate] = useState(false);
 
   useEffect(() => {
-    fetchMyBoards();
-  }, [token]);
+    if (isAuthenticated) {
+      fetchMyBoards();
+    }
+  }, [isAuthenticated]);
 
   const fetchMyBoards = async () => {
     setIsLoadingBoards(true);
     try {
       const res = await fetch(`${API_URL}/boards/my-boards`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (res.ok) setMyBoards(await res.json());
     } catch (err) {
@@ -63,8 +65,8 @@ export const Dashboard = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
+        credentials: "include",
         body: JSON.stringify({
           title: newTitle || "Untitled Board",
           maxUsers: newMaxUsers,
@@ -92,7 +94,7 @@ export const Dashboard = () => {
     try {
       const res = await fetch(`${API_URL}/boards/${boardId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
       });
       if (res.ok) fetchMyBoards();
     } catch (err) {

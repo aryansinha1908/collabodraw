@@ -8,6 +8,8 @@ import { Board } from "./models";
 import jwt from "jsonwebtoken";
 import { authRouter } from "./routes/auth";
 import { boardsRouter } from "./routes/boards";
+import cookie from "cookie";
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 
@@ -21,6 +23,7 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use(cookieParser());
 
 app.use("/auth", authRouter);
 app.use("/boards", boardsRouter);
@@ -31,6 +34,7 @@ const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
@@ -42,18 +46,20 @@ mongoose
 const roomUsers = new Map<string, Set<string>>();
 
 io.use((socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) return next(new Error("Authentication error: No token provided"));
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "aryansinha1908",
-    ) as any;
-    socket.data.username = decoded.username;
-    socket.data.userId = decoded.userId || decoded.id || decoded._id;
+    const rawCookies = socket.handshake.headers.cookie;
+    if (!rawCookies) return next(new Error("Authentication error"));
+
+    const parsedCookies = cookie.parseCookie(rawCookies);
+    const token = parsedCookies.draw_token;
+    if (!token) return next(new Error("Authentication error"));
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+    socket.data.user = decoded;
+
     next();
   } catch (err) {
-    next(new Error("Authentication error: Invalid token"));
+    next(new Error("Authentication error"));
   }
 });
 
@@ -68,10 +74,10 @@ const getRoomUsers = (roomId: string) => {
   const socketIds = roomUsers.get(roomId) || new Set();
   for (const id of socketIds) {
     const socket = io.sockets.sockets.get(id);
-    if (socket && socket.data.username) {
+    if (socket && socket.data.user?.username) {
       users.push({
         id,
-        username: socket.data.username,
+        username: socket.data.user.username, // <-- FIXED
         isOwner: socket.data.isOwner || false,
         canEdit: socket.data.canEdit || false,
       });
@@ -106,7 +112,10 @@ io.on("connection", (socket) => {
 
   socket.on("join-room", async (roomId: string) => {
     try {
+      const currentUser = socket.data.user;
+
       const board = await Board.findOne({ boardId: roomId });
+      // console.log(currentUser, board);
       if (!board)
         return socket.emit(
           "join-error",
@@ -125,9 +134,7 @@ io.on("connection", (socket) => {
       }
 
       const isOwner =
-        board.ownerId &&
-        socket.data.userId &&
-        board.ownerId.toString() === socket.data.userId.toString();
+        board.ownerId?.toString() === currentUser.userId?.toString();
 
       // --- PRIVATE BOARD INTERCEPTION ---
       if (board.isPrivate && !isOwner) {
@@ -156,7 +163,7 @@ io.on("connection", (socket) => {
         socket.emit("waiting-approval");
         io.to(ownerSocketId).emit("join-request", {
           socketId: socket.id,
-          username: socket.data.username,
+          username: currentUser.username,
           roomId,
         });
         return;
@@ -253,10 +260,10 @@ io.on("connection", (socket) => {
   socket.on("redo", (roomId: string) => socket.to(roomId).emit("redo"));
   socket.on("cursor-move", ({ roomId, x, y }) => {
     socket.to(roomId).emit("cursor-move", {
-      userId: socket.id,
+      userId: socket.data.user.userId,
       x,
       y,
-      username: socket.data.username,
+      username: socket.data.user?.username,
     });
   });
 
