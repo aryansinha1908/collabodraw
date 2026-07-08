@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 export const Canvas: React.FC = () => {
   const lastCursorEmit = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const { roomId } = useParams();
   const activeRoomId = roomId || "default-room";
 
@@ -43,6 +44,8 @@ export const Canvas: React.FC = () => {
     offsetX,
     offsetY,
     setOffset, // Pulled new pan states from store
+    typingState,
+    setTypingState,
   } = useBoardStore();
 
   // --- NEW: Coordinate Math Helper ---
@@ -172,10 +175,65 @@ export const Canvas: React.FC = () => {
         );
         ctx.arc(element.x, element.y, radius, 0, 2 * Math.PI);
         ctx.stroke();
+      } else if (
+        element.type === "text" &&
+        element.text &&
+        element.x !== undefined &&
+        element.y !== undefined
+      ) {
+        ctx.font = `${element.fontSize}px sans-serif`;
+        ctx.fillStyle = element.color; // Text uses fillStyle, not strokeStyle!
+        ctx.textBaseline = "top"; // Aligns the canvas text with our HTML textarea
+
+        // Canvas fillText doesn't support line breaks natively.
+        // We have to split by \n and draw each line slightly lower!
+        const lines = element.text.split("\n");
+        const lineHeight = (element.fontSize || 16) * 1.2;
+
+        lines.forEach((line, index) => {
+          ctx.fillText(line, element.x!, element.y! + index * lineHeight);
+        });
       }
     });
     ctx.globalCompositeOperation = "source-over";
   }, [elements, currentElement, remoteElements, canvasSize]);
+
+  useEffect(() => {
+    if (typingState && textAreaRef.current) {
+      setTimeout(() => {
+        textAreaRef.current?.focus();
+      }, 10);
+    }
+  }, [typingState]);
+
+  // --- NEW: Commit Text Logic ---
+  const commitText = () => {
+    if (!typingState) return;
+
+    // Only save it if they actually typed something
+    if (typingState.text.trim() !== "") {
+      const newElement: CanvasElement = {
+        id: uuidv4(),
+        type: "text",
+        color: strokeColor,
+        strokeWidth,
+        x: typingState.x,
+        y: typingState.y,
+        text: typingState.text,
+        // Make sure this matches the fontSize in your textarea styles
+        fontSize: Math.max(strokeWidth * 8, 16),
+        createdBy: socket.id,
+      };
+
+      // 1. Save to local state
+      setElements([...elements, newElement], true);
+      // 2. Broadcast to everyone else!
+      socket.emit("draw-end", { roomId: activeRoomId, element: newElement });
+    }
+
+    // Close the box
+    setTypingState(null);
+  };
 
   // --- UPDATED: Mouse Handlers ---
   const handleMouseDown = (e: React.PointerEvent) => {
@@ -197,9 +255,23 @@ export const Canvas: React.FC = () => {
       });
       return; // Instantly block the draw event
     }
-    // ---------------------------
 
     const { x, y } = getCoordinates(e);
+    // --- NEW: TEXT TOOL INTERCEPTION ---
+    if (currentTool === "text") {
+      e.preventDefault(); // CRITICAL: Stops canvas from stealing focus
+      e.stopPropagation();
+
+      if (typingState) {
+        commitText();
+        setTypingState(null);
+        return;
+      }
+
+      const { x, y } = getCoordinates(e);
+      setTypingState({ x, y, text: "" });
+      return;
+    }
     setIsDrawing(true);
 
     const newElement: CanvasElement = {
@@ -314,6 +386,44 @@ export const Canvas: React.FC = () => {
         onPointerOut={handleMouseUp}
         className={`${currentTool === "hand" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"} touch-none block`}
       />
+
+      {/* --- NEW: THE HTML TEXT OVERLAY --- */}
+      {typingState && (
+        <textarea
+          ref={textAreaRef}
+          value={typingState.text}
+          onChange={(e) =>
+            setTypingState({ ...typingState, text: e.target.value })
+          }
+          onBlur={commitText} // Safe to add back now!
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault(); // Stops the browser from doing any weird focus shifts
+              commitText(); // Save it instead of destroying it!
+            }
+          }}
+          style={{
+            position: "absolute",
+            left: `${typingState.x}px`,
+            top: `${typingState.y}px`,
+            margin: 0,
+            padding: 0,
+            border: "none",
+            outline: "1px dashed rgba(59, 130, 246, 0.5)", // Soft blue outline
+            background: "transparent", // Completely clear
+            color: strokeColor,
+            fontFamily: "sans-serif",
+            fontSize: `${Math.max(strokeWidth * 8, 16)}px`,
+            lineHeight: "1.2",
+            whiteSpace: "pre",
+            resize: "none",
+            overflow: "hidden",
+            zIndex: 99999,
+            minWidth: "150px",
+            minHeight: "40px",
+          }}
+        />
+      )}
     </div>
   );
 };

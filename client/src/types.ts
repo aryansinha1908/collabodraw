@@ -1,4 +1,11 @@
-export type Tool = "pen" | "eraser" | "rect" | "circle" | "line" | "hand";
+export type Tool =
+  | "pen"
+  | "eraser"
+  | "rect"
+  | "circle"
+  | "line"
+  | "hand"
+  | "text";
 
 export interface Point {
   x: number;
@@ -16,4 +23,6 @@ export interface CanvasElement {
   color: string;
   strokeWidth: number;
   createdBy?: string;
+  text?: string;
+  fontSize?: number;
 }

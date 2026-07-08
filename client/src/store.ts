@@ -47,6 +47,11 @@ interface BoardState {
   offsetX: number;
   offsetY: number;
   setOffset: (x: number, y: number) => void;
+
+  typingState: { x: number; y: number; text: string } | null;
+  setTypingState: (
+    state: { x: number; y: number; text: string } | null,
+  ) => void;
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -139,4 +144,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   offsetX: 0,
   offsetY: 0,
   setOffset: (offsetX, offsetY) => set({ offsetX, offsetY }),
+
+  typingState: null,
+  setTypingState: (typingState) => set({ typingState }),
 }));

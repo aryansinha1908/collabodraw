@@ -25,6 +25,7 @@ import {
   Shield,
   Copy,
   Link,
+  Type,
 } from "lucide-react";
 
 export const BoardPage = () => {
@@ -387,6 +388,7 @@ export const BoardPage = () => {
         "4": "rect",
         "5": "circle",
         "6": "line",
+        "7": "text",
       };
 
       if (toolsMap[e.key]) {
@@ -585,6 +587,17 @@ export const BoardPage = () => {
                 <Minus size={18} />
                 <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
                   6
+                </span>
+              </button>
+
+              <button
+                onClick={() => setTool("text")}
+                className={`relative p-2.5 rounded-lg transition-colors ${currentTool === "text" ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"}`}
+                title="Text (7)"
+              >
+                <Type size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  7
                 </span>
               </button>
             </>
