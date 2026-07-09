@@ -8,6 +8,7 @@ interface BoardState {
   currentTool: Tool;
   strokeColor: string;
   strokeWidth: number;
+  isZenMode: boolean;
 
   isAuthenticated: boolean;
   username: string | null;
@@ -26,6 +27,7 @@ interface BoardState {
   remoteUndo: (userId: string) => void;
   remoteRedo: () => void;
   remoteClear: () => void;
+  toggleZenMode: () => void;
 
   zoom: number;
   setZoom: (zoom: number) => void;
@@ -52,6 +54,14 @@ interface BoardState {
   setTypingState: (
     state: { x: number; y: number; text: string } | null,
   ) => void;
+
+  messages: ChatMessage[];
+  addMessage: (msg: ChatMessage) => void;
+  isChatOpen: boolean;
+  toggleChat: () => void;
+  setHasUnread: (status: boolean) => void;
+  hasUnread: boolean;
+  setMessages: (messages: ChatMessage[]) => void;
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -61,6 +71,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   currentTool: "pen",
   strokeColor: "#ffffff",
   strokeWidth: 3,
+  isZenMode: false,
 
   isAuthenticated: false,
   username: null,
@@ -135,6 +146,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   remoteUndo: (userId) => get().undo(userId),
   remoteRedo: () => get().redo(),
   remoteClear: () => get().clearBoard(),
+  toggleZenMode: () => set((state) => ({ isZenMode: !state.isZenMode })),
 
   zoom: 1,
   setZoom: (zoom) => set({ zoom }),
@@ -147,4 +159,21 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   typingState: null,
   setTypingState: (typingState) => set({ typingState }),
+
+  messages: [],
+  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
+  isChatOpen: false,
+  toggleChat: () =>
+    set((state) => ({ isChatOpen: !state.isChatOpen, hasUnread: false })),
+  hasUnread: false,
+  setHasUnread: (status) => set({ hasUnread: status }),
+  setMessages: (messages) => set({ messages }),
 }));
+
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  timestamp: number;
+}

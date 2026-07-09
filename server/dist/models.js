@@ -31,6 +31,18 @@ const BoardSchema = new mongoose_1.default.Schema({
     maxUsers: { type: Number, default: 10 },
     isPrivate: { type: Boolean, default: false },
     elements: { type: Array, default: [] },
+    messages: {
+        type: [
+            {
+                id: String,
+                userId: String,
+                username: String,
+                text: String,
+                timestamp: Number,
+            },
+        ],
+        default: [],
+    },
 }, { timestamps: true });
 const UserSchema = new mongoose_1.default.Schema({
     username: { type: String, required: true, unique: true },

@@ -85,7 +85,8 @@ io.on("connection", (socket) => {
             roomUsers.set(roomId, new Set());
         roomUsers.get(roomId)?.add(targetSocket.id);
         targetSocket.emit("board-state", board.elements);
-        targetSocket.emit("join-approved"); // Resolves the loading toast
+        targetSocket.emit("board-messages", board.messages || []);
+        targetSocket.emit("join-approved");
         targetSocket.to(roomId).emit("user-joined", targetSocket.id);
         io.to(roomId).emit("room-users", getRoomUsers(roomId));
     };
@@ -211,6 +212,18 @@ io.on("connection", (socket) => {
             y,
             username: socket.data.user?.username,
         });
+    });
+    // --- UPDATED CHAT EVENTS ---
+    socket.on("send-message", async ({ roomId, message }) => {
+        // 1. Instantly broadcast to everyone else in the room
+        socket.to(roomId).emit("receive-message", message);
+        // 2. Persist it to MongoDB
+        try {
+            await models_1.Board.findOneAndUpdate({ boardId: roomId }, { $push: { messages: message } });
+        }
+        catch (err) {
+            console.error("Failed to save chat message to DB:", err);
+        }
     });
     socket.on("disconnect", async () => {
         for (const [roomId, users] of Array.from(roomUsers.entries())) {

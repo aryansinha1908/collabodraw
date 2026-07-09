@@ -1,5 +1,6 @@
+import { v4 as uuidv4 } from "uuid";
 import { jsPDF } from "jspdf";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Canvas } from "../components/Canvas";
 import { useBoardStore } from "../store";
@@ -26,13 +27,65 @@ import {
   Copy,
   Link,
   Type,
+  Focus,
+  Send,
+  MessageSquare,
+  Users,
 } from "lucide-react";
+
+// --- NEW CHAT BUBBLE COMPONENT ---
+const ChatMessageItem = ({ msg, isMe }: { msg: any; isMe: boolean }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const CHAR_LIMIT = 200; // Truncate after 200 characters
+
+  const isLong = msg.text.length > CHAR_LIMIT;
+  const displayText =
+    isLong && !isExpanded ? `${msg.text.slice(0, CHAR_LIMIT)}...` : msg.text;
+
+  return (
+    <div
+      className={`flex flex-col max-w-[85%] ${isMe ? "self-end items-end" : "self-start items-start"}`}
+    >
+      <span className="text-[10px] text-gray-500 mb-1 px-1">
+        {isMe ? "You" : msg.username} •{" "}
+        {new Date(msg.timestamp).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </span>
+      <div
+        className={`px-3 py-2 rounded-2xl text-sm shadow-sm break-words whitespace-pre-wrap ${
+          isMe
+            ? "bg-blue-600 text-white rounded-tr-sm"
+            : "bg-gray-800 border border-gray-700 text-gray-200 rounded-tl-sm"
+        }`}
+      >
+        {displayText}
+        {isLong && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className={`block mt-1.5 text-[11px] font-bold tracking-wide hover:underline ${
+              isMe ? "text-blue-200" : "text-blue-400"
+            }`}
+          >
+            {isExpanded ? "Read less" : "Read more"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const BoardPage = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<"participants" | "chat">(
+    "participants",
+  );
 
   const {
     currentTool,
@@ -40,12 +93,14 @@ export const BoardPage = () => {
     setColor,
     strokeWidth,
     setWidth,
+    isZenMode,
     undo,
     redo,
     clearBoard,
     remoteUndo,
     remoteRedo,
     remoteClear,
+    toggleZenMode,
     isAuthenticated,
     zoom,
     setZoom,
@@ -53,6 +108,11 @@ export const BoardPage = () => {
     setRoomUsers,
     offsetX,
     offsetY,
+    messages,
+    addMessage,
+    hasUnread,
+    setHasUnread,
+    username,
   } = useBoardStore();
 
   // Determine current user's permissions
@@ -239,10 +299,20 @@ export const BoardPage = () => {
     socket.on("board-state", (loadedElements) =>
       useBoardStore.getState().setElements(loadedElements, false),
     );
+    socket.on("board-messages", (loadedMessages) => {
+      useBoardStore.getState().setMessages(loadedMessages);
+    });
     socket.on("room-users", (users) => setRoomUsers(users));
     socket.on("undo", (userId) => remoteUndo(userId));
     socket.on("redo", remoteRedo);
     socket.on("clear-board", remoteClear);
+
+    socket.on("receive-message", (message: any) => {
+      addMessage(message);
+      if (!useBoardStore.getState().isChatOpen) {
+        useBoardStore.getState().setHasUnread(true);
+      }
+    });
 
     if (!socket.connected) {
       connectToastId = toast.loading("Connecting to workspace...", {
@@ -280,10 +350,12 @@ export const BoardPage = () => {
       socket.off("join-request");
       socket.off("permission-changed");
       socket.off("board-state");
+      socket.off("board-messages");
       socket.off("room-users");
       socket.off("undo");
       socket.off("redo");
       socket.off("clear-board");
+      socket.off("receive-message");
     };
   }, [
     roomId,
@@ -294,6 +366,13 @@ export const BoardPage = () => {
     setRoomUsers,
     setTool,
   ]);
+
+  // Clear unread notification when switching to the chat tab
+  useEffect(() => {
+    if (rightPanelTab === "chat") {
+      setHasUnread(false);
+    }
+  }, [rightPanelTab, messages, setHasUnread]);
 
   const handleZoomIn = () => setZoom(Math.min(zoom + 0.2, 3));
   const handleZoomOut = () => setZoom(Math.max(zoom - 0.2, 0.4));
@@ -379,6 +458,10 @@ export const BoardPage = () => {
         e.preventDefault();
         setZoom(Math.max(useBoardStore.getState().zoom - 0.1, 0.1));
       }
+      if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        useBoardStore.getState().toggleZenMode();
+      }
 
       // 3. Tool Selection (1-6)
       const toolsMap: Record<string, any> = {
@@ -423,6 +506,47 @@ export const BoardPage = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [roomId, undo, redo, setTool, setZoom, canIEdit]); // <-- Updated dependencies!
 
+  // Auto-scroll to bottom when new messages arrive (Safely!)
+  useEffect(() => {
+    if (rightPanelTab === "chat") {
+      setTimeout(() => {
+        if (chatScrollRef.current) {
+          // This safely scrolls ONLY the internal div, never the page!
+          chatScrollRef.current.scrollTo({
+            top: chatScrollRef.current.scrollHeight,
+            behavior: "smooth",
+          });
+        }
+      }, 50);
+    }
+  }, [messages, rightPanelTab]);
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const sanitizedText = chatInput.replace(
+      /[\s\u200B-\u200F\u2028-\u202F\u205F-\u206F\u2800\u3164\uFFA0]/g,
+      "",
+    );
+
+    if (sanitizedText.length === 0) return;
+
+    const newMessage = {
+      id: uuidv4(),
+      userId: socket.id as string,
+      username: username || "Anonymous",
+      text: chatInput.trim(),
+      timestamp: Date.now(),
+    };
+
+    // 1. Update local UI
+    addMessage(newMessage);
+    // 2. Broadcast to room
+    socket.emit("send-message", { roomId, message: newMessage });
+    // 3. Clear input
+    setChatInput("");
+  };
+
   return (
     <div
       className="relative h-screen w-screen overflow-hidden bg-[#0d1117] font-sans"
@@ -441,7 +565,7 @@ export const BoardPage = () => {
       />
       <button
         onMouseEnter={() => setIsSidebarOpen(true)}
-        className={`absolute top-4 left-4 p-3 bg-gray-900/60 backdrop-blur-md text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl shadow-lg border border-gray-700/50 z-40 transition-all duration-300 ${isSidebarOpen ? "opacity-0 pointer-events-none scale-90" : "opacity-100 scale-100"}`}
+        className={`absolute top-4 left-4 p-3 bg-gray-900/60 backdrop-blur-md text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl shadow-lg border border-gray-700/50 z-40 transition-all duration-300 ${isSidebarOpen || isZenMode ? "opacity-0 pointer-events-none scale-90" : "opacity-100 scale-100"}`}
       >
         <Menu size={24} />
       </button>
@@ -524,7 +648,9 @@ export const BoardPage = () => {
       </div>
 
       {/* --- TOP TOOLBAR --- */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-gray-900/80 backdrop-blur-md p-2.5 rounded-xl shadow-2xl border border-gray-700 z-10">
+      <div
+        className={`absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-gray-900/80 backdrop-blur-md p-2.5 rounded-xl shadow-2xl border border-gray-700 z-10 transition-all duration-300 ${isZenMode ? "-translate-y-[150%] opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}
+      >
         <div className="flex gap-1.5 border-r border-gray-700 pr-4">
           <button
             onClick={() => setTool("hand")}
@@ -673,6 +799,13 @@ export const BoardPage = () => {
 
         <div className="relative flex items-center">
           <button
+            onClick={toggleZenMode}
+            className="p-2.5 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800"
+            title="Zen Mode (Z)"
+          >
+            <Focus size={18} />
+          </button>
+          <button
             onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
             className={`p-2.5 rounded-lg transition-colors ${isExportMenuOpen ? "bg-gray-800 text-green-400" : "text-gray-400 hover:text-green-400 hover:bg-gray-800"}`}
             title="Export Options"
@@ -704,77 +837,181 @@ export const BoardPage = () => {
         </div>
       </div>
 
-      {/* --- RIGHT PANEL (Participants List) --- */}
-      <div className="absolute top-4 right-4 w-72 bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl p-4 z-40 max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-3 pb-3 border-b border-gray-800 flex items-center justify-between">
-          <span>Participants</span>
-          <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">
-            {roomUsers.length}
-          </span>
-        </h3>
-        <ul className="flex flex-col gap-3">
-          {roomUsers.map((user: any) => (
-            <li
-              key={user.id}
-              className="flex flex-col gap-2 text-white bg-gray-800/40 p-3 rounded-lg border border-gray-700/50"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-inner border border-white/10 ${user.isOwner ? "bg-gradient-to-br from-yellow-500 to-orange-600" : "bg-gradient-to-br from-blue-500 to-purple-600"}`}
-                  >
-                    {user.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium truncate text-gray-200">
-                      {user.username}{" "}
-                      {user.id === socket.id && (
-                        <span className="text-gray-500 text-xs">(You)</span>
-                      )}
-                    </span>
-                    <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
-                      {user.isOwner ? (
-                        <>
-                          <Shield size={10} className="text-yellow-500" /> Owner
-                        </>
-                      ) : user.canEdit ? (
-                        <>
-                          <Pen size={10} className="text-blue-400" /> Editor
-                        </>
-                      ) : (
-                        <>
-                          <Eye size={10} className="text-gray-400" /> Viewer
-                        </>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
+      {/* --- FLOATING EXIT ZEN MODE BUTTON --- */}
+      <div
+        className={`absolute top-4 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${isZenMode ? "translate-y-0 opacity-100" : "-translate-y-[150%] opacity-0 pointer-events-none"}`}
+      >
+        <button
+          onClick={toggleZenMode}
+          className="flex items-center gap-2 bg-gray-900/80 backdrop-blur-md px-5 py-2.5 rounded-full shadow-2xl border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800 transition-colors text-sm font-semibold tracking-wide"
+        >
+          <Focus size={16} /> Exit Zen Mode (Z)
+        </button>
+      </div>
 
-              {/* Admin Actions (Only visible to the owner looking at other users) */}
-              {amIOwner && !user.isOwner && (
-                <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700/50">
-                  <button
-                    onClick={() =>
-                      socket.emit("update-permission", {
-                        targetSocketId: user.id,
-                        canEdit: !user.canEdit,
-                        roomId,
-                      })
-                    }
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-bold rounded transition-colors uppercase tracking-wider ${user.canEdit ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"}`}
-                  >
-                    {user.canEdit ? "Revoke Access" : "Allow Editing"}
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+      {/* --- UNIFIED RIGHT PANEL (Participants & Chat) --- */}
+      <div
+        className={`absolute top-4 right-4 w-80 bg-gray-900/85 backdrop-blur-xl border border-gray-700/50 rounded-2xl shadow-2xl flex flex-col z-40 transition-all duration-300 overflow-hidden ${isZenMode ? "translate-x-[120%] opacity-0 pointer-events-none" : "translate-x-0 opacity-100"} max-h-[50vh]`}
+      >
+        {/* Panel Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700/50 bg-gray-800/30 shrink-0">
+          <h3 className="text-gray-300 text-sm font-bold flex items-center gap-2">
+            {rightPanelTab === "participants" ? (
+              <>
+                <Users size={16} className="text-blue-400" />
+                Participants
+                <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full ml-1">
+                  {roomUsers.length}
+                </span>
+              </>
+            ) : (
+              <>
+                <MessageSquare size={16} className="text-blue-400" />
+                Room Chat
+              </>
+            )}
+          </h3>
+
+          {/* The Toggle Button */}
+          <button
+            onClick={() =>
+              setRightPanelTab((prev) =>
+                prev === "participants" ? "chat" : "participants",
+              )
+            }
+            className="text-gray-400 hover:text-white transition-colors relative p-1.5 hover:bg-gray-700 rounded-lg"
+            title={
+              rightPanelTab === "participants"
+                ? "Switch to Chat"
+                : "Switch to Participants"
+            }
+          >
+            {rightPanelTab === "participants" ? (
+              <>
+                <MessageSquare size={16} />
+                {hasUnread && (
+                  <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 border border-gray-900 rounded-full animate-pulse" />
+                )}
+              </>
+            ) : (
+              <Users size={16} />
+            )}
+          </button>
+        </div>
+
+        {/* Panel Body */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {rightPanelTab === "participants" ? (
+            /* --- PARTICIPANTS TAB --- */
+            <ul className="flex flex-col gap-3 p-4 overflow-y-auto">
+              {roomUsers.map((user: any) => (
+                <li
+                  key={user.id}
+                  className="flex flex-col gap-2 text-white bg-gray-800/40 p-3 rounded-xl border border-gray-700/50"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-inner border border-white/10 ${user.isOwner ? "bg-gradient-to-br from-yellow-500 to-orange-600" : "bg-gradient-to-br from-blue-500 to-purple-600"}`}
+                      >
+                        {user.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium truncate text-gray-200">
+                          {user.username}{" "}
+                          {user.id === socket.id && (
+                            <span className="text-gray-500 text-xs">(You)</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-gray-400 flex items-center gap-1 mt-0.5">
+                          {user.isOwner ? (
+                            <>
+                              <Shield size={10} className="text-yellow-500" />{" "}
+                              Owner
+                            </>
+                          ) : user.canEdit ? (
+                            <>
+                              <Pen size={10} className="text-blue-400" /> Editor
+                            </>
+                          ) : (
+                            <>
+                              <Eye size={10} className="text-gray-400" /> Viewer
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {amIOwner && !user.isOwner && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-gray-700/50">
+                      <button
+                        onClick={() =>
+                          socket.emit("update-permission", {
+                            targetSocketId: user.id,
+                            canEdit: !user.canEdit,
+                            roomId,
+                          })
+                        }
+                        className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-bold rounded transition-colors uppercase tracking-wider ${user.canEdit ? "bg-red-500/10 text-red-400 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 hover:bg-green-500/20"}`}
+                      >
+                        {user.canEdit ? "Revoke Access" : "Allow Editing"}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            /* --- CHAT TAB --- */
+            <div className="flex flex-col h-full overflow-hidden">
+              <div
+                ref={chatScrollRef}
+                className="flex-1 overflow-y-auto min-h-0 p-4 flex flex-col gap-4"
+              >
+                {messages.length === 0 ? (
+                  <div className="py-12 flex items-center justify-center text-xs text-gray-500 italic">
+                    No messages yet. Start the conversation!
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <ChatMessageItem
+                      key={msg.id}
+                      msg={msg}
+                      isMe={msg.username === username}
+                    />
+                  ))
+                )}
+              </div>
+              <form
+                onSubmit={handleSendMessage}
+                className="p-3 bg-gray-800/50 border-t border-gray-700/50 flex gap-2 shrink-0"
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message..."
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+                <button
+                  type="submit"
+                  disabled={!chatInput.trim()}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-2 rounded-xl transition-colors flex items-center justify-center shadow-md"
+                >
+                  <Send size={16} />
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* --- BOTTOM RIGHT (Zoom Controls) --- */}
-      <div className="absolute bottom-6 right-6 flex items-center bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-40 text-gray-400">
+      <div
+        className={`absolute bottom-6 right-6 flex items-center bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-40 text-gray-400 transition-all duration-300 ${isZenMode ? "translate-y-[120%] opacity-0 pointer-events-none" : "translate-y-0 opacity-100"}`}
+      >
         <button
           onClick={handleZoomOut}
           className="p-3 hover:bg-gray-800 hover:text-white transition-colors"
