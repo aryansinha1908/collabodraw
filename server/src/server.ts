@@ -1,8 +1,9 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import dotenv from "dotenv";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import { authRouter } from "./routes/auth";
@@ -10,8 +11,6 @@ import { boardsRouter } from "./routes/boards";
 import cookie from "cookie";
 import cookieParser from "cookie-parser";
 import { Board, Element } from "./models";
-
-dotenv.config();
 
 const app = express();
 app.use(

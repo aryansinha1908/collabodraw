@@ -5,7 +5,13 @@ import { User } from "../models";
 import { OAuth2Client } from "google-auth-library";
 import authMiddleware from "../middlewares/auth";
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const googleClient = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.NODE_ENV === "production"
+    ? "https://collabodraw-backend.onrender.com/auth/google/callback"
+    : "http://localhost:3001/auth/google/callback",
+);
 
 export const authRouter = express.Router();
 
@@ -115,45 +121,47 @@ authRouter.get("/me", authMiddleware, async (req: any, res) => {
   });
 });
 
-// --- NEW: Google OAuth Route ---
-authRouter.post("/google", async (req, res) => {
+// 1. Sends the user's tab to Google's login screen
+authRouter.get("/google/login", (req, res) => {
+  const url = googleClient.generateAuthUrl({
+    access_type: "offline",
+    scope: ["email", "profile"],
+    prompt: "consent",
+    // Force the redirect URI here as a fallback
+    redirect_uri:
+      process.env.NODE_ENV === "production"
+        ? "https://collabodraw-backend.onrender.com/auth/google/callback"
+        : "http://localhost:3001/auth/google/callback",
+  });
+  res.redirect(url);
+});
+
+// 2. Google redirects the user back here with a secure code
+authRouter.get("/google/callback", async (req, res) => {
   try {
-    // 1. Grab the new token type from the frontend
-    const { access_token } = req.body;
+    const { code } = req.query;
 
-    if (!access_token) {
-      return res.status(400).json({ message: "No access token provided" });
-    }
+    // Trade the code for the actual tokens
+    const { tokens } = await googleClient.getToken(code as string);
 
-    // 2. Query Google directly to verify the token and get the user profile
+    // Fetch the user's profile
     const googleRes = await fetch(
       "https://www.googleapis.com/oauth2/v3/userinfo",
-      {
-        headers: { Authorization: `Bearer ${access_token}` },
-      },
+      { headers: { Authorization: `Bearer ${tokens.access_token}` } },
     );
-
-    if (!googleRes.ok) {
-      return res.status(400).json({ message: "Invalid Google token" });
-    }
-
     const payload = await googleRes.json();
     const { email, name, sub: googleId } = payload;
 
-    // 3. Account Linking / Creation Logic
+    // --- YOUR EXISTING ACCOUNT LINKING LOGIC ---
     let user = await User.findOne({ email });
-
     if (!user) {
-      // First time logging in with Google: Create the account
       let baseUsername = name?.replace(/\s+/g, "").toLowerCase() || "user";
       let username = baseUsername;
       let counter = 1;
-
       while (await User.findOne({ username })) {
         username = `${baseUsername}${counter}`;
         counter++;
       }
-
       user = await User.create({
         username,
         email,
@@ -162,28 +170,27 @@ authRouter.post("/google", async (req, res) => {
       });
     }
 
-    // 4. Generate our standard JWT
+    // --- YOUR EXISTING JWT & COOKIE LOGIC ---
     const token = jwt.sign(
       { userId: user._id, username: user.username },
       process.env.JWT_SECRET as string,
       { expiresIn: "7d" },
     );
 
-    // 5. Set the HTTP-Only Cookie
     res.cookie("draw_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
       path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({
-      message: "Authentication successful",
-      user: { id: user._id, username: user.username, email: user.email },
-    });
+    // 3. Final Redirect: Send the user to the React Dashboard!
+    const frontendUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    res.redirect(`${frontendUrl}/dashboard`);
   } catch (error) {
-    console.error("Google Auth Error:", error);
-    res.status(500).json({ message: "Google authentication failed" });
+    console.error("Google Callback Error:", error);
+    const frontendUrl = process.env.CLIENT_URL || "http://localhost:5173";
+    res.redirect(`${frontendUrl}/auth?error=google_failed`);
   }
 });

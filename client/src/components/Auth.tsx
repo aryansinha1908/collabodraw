@@ -3,7 +3,6 @@ import { useBoardStore } from "../store";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, User, ArrowLeft, Loader2 } from "lucide-react";
-import { useGoogleLogin } from "@react-oauth/google";
 
 const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
@@ -52,39 +51,6 @@ export const Auth: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  const loginWithGoogle = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      setError("");
-      setIsLoading(true);
-
-      try {
-        const res = await fetch(`${API_URL}/auth/google`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          // Send the access_token instead of the credential
-          body: JSON.stringify({ access_token: tokenResponse.access_token }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.message || "Google authentication failed");
-        }
-
-        setAuth(true, data.user.username);
-        navigate("/dashboard");
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    onError: () => setError("Google popup closed or failed."),
-  });
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white relative flex items-center justify-center font-sans overflow-hidden px-4">
@@ -141,9 +107,9 @@ export const Auth: React.FC = () => {
         <div className="flex flex-col gap-4 mb-6">
           <div className="flex justify-center">
             <div className="w-full">
-              <button
-                type="button"
-                onClick={() => loginWithGoogle()}
+              {/* Notice this is now an <a> tag pointing to your backend! */}
+              <a
+                href={`${API_URL}/auth/google/login`}
                 className="w-full flex items-center justify-center gap-3 bg-gray-950/50 hover:bg-gray-800 border border-gray-700 text-gray-300 hover:text-white font-medium py-3 rounded-lg transition-all duration-200 shadow-sm"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -165,7 +131,7 @@ export const Auth: React.FC = () => {
                   />
                 </svg>
                 Continue with Google
-              </button>
+              </a>
             </div>
           </div>
 
