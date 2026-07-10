@@ -12,8 +12,9 @@ const PointSchema = new mongoose.Schema(
 // Element schema for the individual shapes/strokes
 const ElementSchema = new mongoose.Schema(
   {
-    id: { type: String, required: true },
-    type: { type: String, required: true }, // 'pen', 'eraser', 'rect', etc.
+    boardId: { type: String, required: true, index: true }, // <-- INDEX THIS FOR SPEED
+    id: { type: String, required: true, unique: true },
+    type: { type: String, required: true },
     points: [PointSchema],
     x: Number,
     y: Number,
@@ -23,18 +24,17 @@ const ElementSchema = new mongoose.Schema(
     strokeWidth: { type: Number, required: true },
     createdBy: String,
   },
-  { _id: false },
+  { timestamps: true }, // <-- Gives us createdAt for the Undo function!
 );
 
 // Board schema to contain the elements
 const BoardSchema = new mongoose.Schema(
   {
-    boardId: { type: String, required: true, unique: true },
+    boardId: { type: String, required: true, unique: true, index: true },
     title: { type: String, default: "Untitled Board" },
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // <-- THIS IS MANDATORY
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     maxUsers: { type: Number, default: 10 },
     isPrivate: { type: Boolean, default: false },
-    elements: { type: Array, default: [] },
     messages: {
       type: [
         {
@@ -55,10 +55,13 @@ const UserSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, unique: true },
     email: { type: String, required: true, unique: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: false },
+    authProvider: { type: String, enum: ["local", "google"], default: "local" },
+    googleId: { type: String, required: false },
   },
   { timestamps: true },
 );
 
+export const Element = mongoose.model("Element", ElementSchema);
 export const Board = mongoose.model("Board", BoardSchema);
 export const User = mongoose.model("User", UserSchema);

@@ -167,7 +167,21 @@ export const Home = () => {
     navigate("/dashboard");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Ask the backend to destroy the HTTP-only cookie
+      await fetch(
+        `${import.meta.env.VITE_SERVER_URL || "http://localhost:3001"}/auth/logout`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+
+    // Clear local state and redirect
     logout();
     navigate("/");
   };

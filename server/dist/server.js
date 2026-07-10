@@ -9,12 +9,12 @@ const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const mongoose_1 = __importDefault(require("mongoose"));
-const models_1 = require("./models");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_1 = require("./routes/auth");
 const boards_1 = require("./routes/boards");
 const cookie_1 = __importDefault(require("cookie"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const models_1 = require("./models");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
@@ -77,14 +77,14 @@ const getRoomUsers = (roomId) => {
 io.on("connection", (socket) => {
     console.log(`User connected: ${socket.id}`);
     // Helper function to safely join a user into the room state
-    const completeJoin = (targetSocket, roomId, board, isOwner, canEdit) => {
+    const completeJoin = (targetSocket, roomId, board, elements, isOwner, canEdit) => {
         targetSocket.join(roomId);
         targetSocket.data.isOwner = isOwner;
         targetSocket.data.canEdit = canEdit;
         if (!roomUsers.has(roomId))
             roomUsers.set(roomId, new Set());
         roomUsers.get(roomId)?.add(targetSocket.id);
-        targetSocket.emit("board-state", board.elements);
+        targetSocket.emit("board-state", elements);
         targetSocket.emit("board-messages", board.messages || []);
         targetSocket.emit("join-approved");
         targetSocket.to(roomId).emit("user-joined", targetSocket.id);
@@ -97,6 +97,7 @@ io.on("connection", (socket) => {
             // console.log(currentUser, board);
             if (!board)
                 return socket.emit("join-error", "Board not found. Please check the link.");
+            const elements = await models_1.Element.find({ boardId: roomId });
             const room = io.sockets.adapter.rooms.get(roomId);
             const currentUsersCount = room ? room.size : 0;
             if (currentUsersCount >= board.maxUsers && !room?.has(socket.id)) {
@@ -131,7 +132,7 @@ io.on("connection", (socket) => {
                 return;
             }
             // Public board or Owner joining -> Let them straight in
-            completeJoin(socket, roomId, board, isOwner, isOwner);
+            completeJoin(socket, roomId, board, elements, isOwner, isOwner);
             if (isOwner) {
                 socket.to(roomId).emit("owner-connected");
             }
@@ -149,8 +150,9 @@ io.on("connection", (socket) => {
         if (!targetSocket)
             return;
         const board = await models_1.Board.findOne({ boardId: roomId });
+        const elements = await models_1.Element.find({ boardId: roomId });
         if (board) {
-            completeJoin(targetSocket, roomId, board, false, false); // By default, they join as view-only (canEdit = false)
+            completeJoin(targetSocket, roomId, board, elements, false, false); // By default, they join as view-only (canEdit = false)
         }
     });
     socket.on("reject-join", ({ targetSocketId }) => {
@@ -177,29 +179,29 @@ io.on("connection", (socket) => {
     socket.on("draw-end", async ({ roomId, element }) => {
         socket.to(roomId).emit("draw-end", element);
         try {
-            await models_1.Board.findOneAndUpdate({ boardId: roomId }, { $push: { elements: element } }, { upsert: true });
+            await models_1.Element.findOneAndUpdate({ id: element.id }, { ...element, boardId: roomId }, { upsert: true });
         }
-        catch (error) { }
+        catch (error) {
+            console.error("Failed to save element:", error);
+        }
     });
     socket.on("clear-board", async (roomId) => {
         socket.to(roomId).emit("clear-board");
         try {
-            await models_1.Board.findOneAndUpdate({ boardId: roomId }, { $set: { elements: [] } });
+            await models_1.Element.deleteMany({ boardId: roomId });
         }
         catch (error) { }
     });
     socket.on("undo", async ({ roomId, userId }) => {
         socket.to(roomId).emit("undo", userId);
         try {
-            const board = await models_1.Board.findOne({ boardId: roomId });
-            if (!board)
-                return;
-            const lastUserElementIndex = board.elements
-                .map((e) => e.createdBy)
-                .lastIndexOf(userId);
-            if (lastUserElementIndex !== -1) {
-                board.elements.splice(lastUserElementIndex, 1);
-                await board.save();
+            // Find the most recent element created by this specific user on this board
+            const lastElement = await models_1.Element.findOne({
+                boardId: roomId,
+                createdBy: userId,
+            }).sort({ createdAt: -1 }); // -1 means newest first
+            if (lastElement) {
+                await models_1.Element.deleteOne({ _id: lastElement._id });
             }
         }
         catch (error) { }

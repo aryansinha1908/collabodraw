@@ -8,7 +8,9 @@ const express_1 = __importDefault(require("express"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const models_1 = require("../models");
+const google_auth_library_1 = require("google-auth-library");
 const auth_1 = __importDefault(require("../middlewares/auth"));
+const googleClient = new google_auth_library_1.OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 exports.authRouter = express_1.default.Router();
 // REGISTER
 exports.authRouter.post("/register", async (req, res) => {
@@ -31,6 +33,7 @@ exports.authRouter.post("/register", async (req, res) => {
             secure: process.env.NODE_ENV === "production", // HTTPS only in prod
             sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            path: "/",
         });
         // 2. Do NOT send the token in the JSON anymore
         res.status(200).json({
@@ -50,7 +53,7 @@ exports.authRouter.post("/login", async (req, res) => {
         if (!user) {
             return res.status(400).json({ error: "Invalid credentials" });
         }
-        const isMatch = await bcryptjs_1.default.compare(password, user.passwordHash);
+        const isMatch = await bcryptjs_1.default.compare(password, user.passwordHash || "");
         if (!isMatch) {
             return res.status(400).json({ error: "Invalid credentials" });
         }
@@ -64,6 +67,7 @@ exports.authRouter.post("/login", async (req, res) => {
             secure: process.env.NODE_ENV === "production", // HTTPS only in prod
             sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            path: "/",
         });
         // 2. Do NOT send the token in the JSON anymore
         res.status(200).json({
@@ -76,12 +80,14 @@ exports.authRouter.post("/login", async (req, res) => {
     }
 });
 exports.authRouter.post("/logout", (req, res) => {
-    res.clearCookie("draw_token", {
+    res.cookie("draw_token", "", {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        path: "/",
+        expires: new Date(0),
     });
-    res.status(200).json({ message: "Logged out" });
+    res.json({ message: "Logged out successfully" });
 });
 // GET /auth/me
 exports.authRouter.get("/me", auth_1.default, async (req, res) => {
@@ -89,4 +95,59 @@ exports.authRouter.get("/me", auth_1.default, async (req, res) => {
         isAuthenticated: true,
         username: req.user.username, // Assuming your JWT payload has username
     });
+});
+// --- NEW: Google OAuth Route ---
+exports.authRouter.post("/google", async (req, res) => {
+    try {
+        // 1. Grab the new token type from the frontend
+        const { access_token } = req.body;
+        if (!access_token) {
+            return res.status(400).json({ message: "No access token provided" });
+        }
+        // 2. Query Google directly to verify the token and get the user profile
+        const googleRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (!googleRes.ok) {
+            return res.status(400).json({ message: "Invalid Google token" });
+        }
+        const payload = await googleRes.json();
+        const { email, name, sub: googleId } = payload;
+        // 3. Account Linking / Creation Logic
+        let user = await models_1.User.findOne({ email });
+        if (!user) {
+            // First time logging in with Google: Create the account
+            let baseUsername = name?.replace(/\s+/g, "").toLowerCase() || "user";
+            let username = baseUsername;
+            let counter = 1;
+            while (await models_1.User.findOne({ username })) {
+                username = `${baseUsername}${counter}`;
+                counter++;
+            }
+            user = await models_1.User.create({
+                username,
+                email,
+                authProvider: "google",
+                googleId,
+            });
+        }
+        // 4. Generate our standard JWT
+        const token = jsonwebtoken_1.default.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: "7d" });
+        // 5. Set the HTTP-Only Cookie
+        res.cookie("draw_token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+            path: "/",
+        });
+        res.json({
+            message: "Authentication successful",
+            user: { id: user._id, username: user.username, email: user.email },
+        });
+    }
+    catch (error) {
+        console.error("Google Auth Error:", error);
+        res.status(500).json({ message: "Google authentication failed" });
+    }
 });

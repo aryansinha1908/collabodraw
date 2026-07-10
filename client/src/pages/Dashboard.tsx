@@ -107,7 +107,19 @@ export const Dashboard = () => {
     if (joinId.trim()) navigate(`/board/${joinId.trim()}`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch(
+        `${import.meta.env.VITE_SERVER_URL || "http://localhost:3001"}/auth/logout`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+
     logout();
     navigate("/");
   };

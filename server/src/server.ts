@@ -4,12 +4,12 @@ import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import { Board } from "./models";
 import jwt from "jsonwebtoken";
 import { authRouter } from "./routes/auth";
 import { boardsRouter } from "./routes/boards";
 import cookie from "cookie";
 import cookieParser from "cookie-parser";
+import { Board, Element } from "./models";
 
 dotenv.config();
 
@@ -94,6 +94,7 @@ io.on("connection", (socket) => {
     targetSocket: any,
     roomId: string,
     board: any,
+    elements: any,
     isOwner: boolean,
     canEdit: boolean,
   ) => {
@@ -104,7 +105,7 @@ io.on("connection", (socket) => {
     if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Set());
     roomUsers.get(roomId)?.add(targetSocket.id);
 
-    targetSocket.emit("board-state", board.elements);
+    targetSocket.emit("board-state", elements);
     targetSocket.emit("board-messages", board.messages || []);
 
     targetSocket.emit("join-approved");
@@ -123,6 +124,8 @@ io.on("connection", (socket) => {
           "join-error",
           "Board not found. Please check the link.",
         );
+
+      const elements = await Element.find({ boardId: roomId });
 
       const room = io.sockets.adapter.rooms.get(roomId);
       const currentUsersCount = room ? room.size : 0;
@@ -172,7 +175,7 @@ io.on("connection", (socket) => {
       }
 
       // Public board or Owner joining -> Let them straight in
-      completeJoin(socket, roomId, board, isOwner, isOwner);
+      completeJoin(socket, roomId, board, elements, isOwner, isOwner);
 
       if (isOwner) {
         socket.to(roomId).emit("owner-connected");
@@ -190,8 +193,9 @@ io.on("connection", (socket) => {
     if (!targetSocket) return;
 
     const board = await Board.findOne({ boardId: roomId });
+    const elements = await Element.find({ boardId: roomId });
     if (board) {
-      completeJoin(targetSocket, roomId, board, false, false); // By default, they join as view-only (canEdit = false)
+      completeJoin(targetSocket, roomId, board, elements, false, false); // By default, they join as view-only (canEdit = false)
     }
   });
 
@@ -226,35 +230,34 @@ io.on("connection", (socket) => {
   socket.on("draw-end", async ({ roomId, element }) => {
     socket.to(roomId).emit("draw-end", element);
     try {
-      await Board.findOneAndUpdate(
-        { boardId: roomId },
-        { $push: { elements: element } },
+      await Element.findOneAndUpdate(
+        { id: element.id },
+        { ...element, boardId: roomId },
         { upsert: true },
       );
-    } catch (error) {}
+    } catch (error) {
+      console.error("Failed to save element:", error);
+    }
   });
 
   socket.on("clear-board", async (roomId: string) => {
     socket.to(roomId).emit("clear-board");
     try {
-      await Board.findOneAndUpdate(
-        { boardId: roomId },
-        { $set: { elements: [] } },
-      );
+      await Element.deleteMany({ boardId: roomId });
     } catch (error) {}
   });
 
   socket.on("undo", async ({ roomId, userId }) => {
     socket.to(roomId).emit("undo", userId);
     try {
-      const board = await Board.findOne({ boardId: roomId });
-      if (!board) return;
-      const lastUserElementIndex = board.elements
-        .map((e: any) => e.createdBy)
-        .lastIndexOf(userId);
-      if (lastUserElementIndex !== -1) {
-        board.elements.splice(lastUserElementIndex, 1);
-        await board.save();
+      // Find the most recent element created by this specific user on this board
+      const lastElement = await Element.findOne({
+        boardId: roomId,
+        createdBy: userId,
+      }).sort({ createdAt: -1 }); // -1 means newest first
+
+      if (lastElement) {
+        await Element.deleteOne({ _id: lastElement._id });
       }
     } catch (error) {}
   });
