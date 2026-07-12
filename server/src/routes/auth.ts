@@ -9,7 +9,7 @@ const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.NODE_ENV === "production"
-    ? "https://collabodraw-backend.onrender.com/auth/google/callback"
+    ? "https://collabodraw-backend.onrender.com/api/auth/google/callback"
     : "http://localhost:3001/auth/google/callback",
 );
 
@@ -130,7 +130,7 @@ authRouter.get("/google/login", (req, res) => {
     // Force the redirect URI here as a fallback
     redirect_uri:
       process.env.NODE_ENV === "production"
-        ? "https://collabodraw-backend.onrender.com/auth/google/callback"
+        ? "https://collabodraw-backend.onrender.com/api/auth/google/callback"
         : "http://localhost:3001/auth/google/callback",
   });
   res.redirect(url);

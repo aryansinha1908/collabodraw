@@ -109,7 +109,7 @@ export const Auth: React.FC = () => {
             <div className="w-full">
               {/* Notice this is now an <a> tag pointing to your backend! */}
               <a
-                href={`${API_URL}/auth/google/login`}
+                href={`/api/auth/google/login`}
                 className="w-full flex items-center justify-center gap-3 bg-gray-950/50 hover:bg-gray-800 border border-gray-700 text-gray-300 hover:text-white font-medium py-3 rounded-lg transition-all duration-200 shadow-sm"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
