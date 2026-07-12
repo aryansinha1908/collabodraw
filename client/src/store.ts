@@ -11,8 +11,10 @@ interface BoardState {
   isZenMode: boolean;
 
   isAuthenticated: boolean;
+  isCheckingAuth: boolean;
   username: string | null;
   setAuth: (isAuthenticated: boolean, username: string | null) => void;
+  checkAuth: () => Promise<void>;
   logout: () => void;
 
   // Local Actions
@@ -74,9 +76,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isZenMode: false,
 
   isAuthenticated: false,
+  isCheckingAuth: false,
   username: null,
 
   setAuth: (isAuthenticated, username) => set({ isAuthenticated, username }),
+  checkAuth: async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SERVER_URL || "http://localhost:3001"}/auth/me`,
+        {
+          credentials: "include",
+        },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        set({
+          isAuthenticated: true,
+          username: data.username,
+          isCheckingAuth: false,
+        });
+      } else {
+        set({ isAuthenticated: false, isCheckingAuth: false });
+      }
+    } catch (error) {
+      set({ isAuthenticated: false, isCheckingAuth: false });
+    }
+  },
 
   logout: () => set({ isAuthenticated: false, username: null }),
 
