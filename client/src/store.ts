@@ -76,7 +76,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   isZenMode: false,
 
   isAuthenticated: false,
-  isCheckingAuth: false,
+  isCheckingAuth: true,
   username: null,
 
   setAuth: (isAuthenticated, username) => set({ isAuthenticated, username }),
