@@ -1,12 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    },
-    {
       "source": "/api/:path*",
       "destination": "https://collabodraw-backend.onrender.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
