@@ -23,6 +23,7 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
+app.set("trust proxy", 1);
 
 app.use("/auth", authRouter);
 app.use("/boards", boardsRouter);
