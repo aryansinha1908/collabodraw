@@ -194,3 +194,18 @@ authRouter.get("/google/callback", async (req, res) => {
     res.redirect(`${frontendUrl}/auth?error=google_failed`);
   }
 });
+
+// GET /auth/ticket
+authRouter.get("/ticket", authMiddleware, (req: any, res) => {
+  // If they made it past authMiddleware, their HTTP-Only cookie is valid!
+
+  // Create a temporary ticket that expires in 30 seconds
+  const secret = (process.env.JWT_SECRET as string) || "aryansinha1908";
+  const ticket = jwt.sign(
+    { userId: req.user.userId, username: req.user.username },
+    secret,
+    { expiresIn: "30s" }, // Super short lifespan for security
+  );
+
+  res.status(200).json({ ticket });
+});

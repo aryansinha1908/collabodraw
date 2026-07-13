@@ -46,20 +46,23 @@ mongoose
 const roomUsers = new Map<string, Set<string>>();
 
 io.use((socket, next) => {
+  // 1. Look for the ticket provided by the frontend
+  const token = socket.handshake.auth.token;
+
+  if (!token) {
+    return next(new Error("Authentication error: No ticket provided"));
+  }
+
   try {
-    const rawCookies = socket.handshake.headers.cookie;
-    if (!rawCookies) return next(new Error("Authentication error"));
+    // 2. Verify the temporary ticket
+    const secret = (process.env.JWT_SECRET as string) || "aryansinha1908";
+    const decoded = jwt.verify(token, secret);
 
-    const parsedCookies = cookie.parseCookie(rawCookies);
-    const token = parsedCookies.draw_token;
-    if (!token) return next(new Error("Authentication error"));
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+    // 3. Attach the user to the socket session
     socket.data.user = decoded;
-
     next();
-  } catch (err) {
-    next(new Error("Authentication error"));
+  } catch (error) {
+    return next(new Error("Authentication error: Invalid or expired ticket"));
   }
 });
 

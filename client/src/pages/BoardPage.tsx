@@ -129,6 +129,48 @@ export const BoardPage = () => {
 
     let connectToastId: string;
 
+    const connectWithTicket = async () => {
+      try {
+        connectToastId = toast.loading("Getting workspace secure ticket...", {
+          style: {
+            background: "#1f2937",
+            color: "#fff",
+            border: "1px solid #374151",
+          },
+        });
+
+        // 1. Ask the Vercel Proxy (which has the cookie) for a ticket
+        const res = await fetch("/api/auth/ticket");
+        if (!res.ok) throw new Error("Failed to get ticket");
+        const data = await res.json();
+
+        // 2. Give the ticket to Socket.io
+        socket.auth = { token: data.ticket };
+
+        // 3. NOW connect directly to Render!
+        toast.loading("Connecting to workspace...", { id: connectToastId });
+        socket.connect();
+      } catch (error) {
+        toast.error("Failed to authenticate with real-time server", {
+          id: connectToastId,
+        });
+        navigate("/dashboard");
+      }
+    };
+
+    if (!socket.connected) {
+      connectWithTicket(); // Run the new function!
+    } else {
+      connectToastId = toast.loading("Joining workspace...", {
+        style: {
+          background: "#1f2937",
+          color: "#fff",
+          border: "1px solid #374151",
+        },
+      });
+      socket.emit("join-room", roomId);
+    }
+
     socket.on("connect_error", (err) => {
       toast.error(`Connection failed: ${err.message}`, {
         id: connectToastId,
@@ -314,26 +356,6 @@ export const BoardPage = () => {
         useBoardStore.getState().setHasUnread(true);
       }
     });
-
-    if (!socket.connected) {
-      connectToastId = toast.loading("Connecting to workspace...", {
-        style: {
-          background: "#1f2937",
-          color: "#fff",
-          border: "1px solid #374151",
-        },
-      });
-      socket.connect();
-    } else {
-      connectToastId = toast.loading("Joining workspace...", {
-        style: {
-          background: "#1f2937",
-          color: "#fff",
-          border: "1px solid #374151",
-        },
-      });
-      socket.emit("join-room", roomId);
-    }
 
     return () => {
       if (connectToastId) toast.dismiss(connectToastId);
