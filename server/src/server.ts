@@ -229,6 +229,7 @@ io.on("connection", (socket) => {
   );
   socket.on("draw-end", async ({ roomId, element }) => {
     socket.to(roomId).emit("draw-end", element);
+    if (element.tool === "laser") return;
     try {
       await Element.findOneAndUpdate(
         { id: element.id },
@@ -265,7 +266,7 @@ io.on("connection", (socket) => {
   socket.on("redo", (roomId: string) => socket.to(roomId).emit("redo"));
   socket.on("cursor-move", ({ roomId, x, y }) => {
     socket.to(roomId).emit("cursor-move", {
-      userId: socket.data.user.userId,
+      userId: socket.id,
       x,
       y,
       username: socket.data.user?.username,

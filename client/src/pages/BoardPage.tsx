@@ -31,6 +31,7 @@ import {
   Send,
   MessageSquare,
   Users,
+  Wand2,
 } from "lucide-react";
 
 // --- NEW CHAT BUBBLE COMPONENT ---
@@ -472,6 +473,7 @@ export const BoardPage = () => {
         "5": "circle",
         "6": "line",
         "7": "text",
+        "8": "laser",
       };
 
       if (toolsMap[e.key]) {
@@ -724,6 +726,20 @@ export const BoardPage = () => {
                 <Type size={18} />
                 <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
                   7
+                </span>
+              </button>
+              <button
+                onClick={() => setTool("laser")}
+                title="Laser Pointer (8)"
+                className={`relative p-2.5 rounded-lg transition-colors ${
+                  currentTool === "laser"
+                    ? "bg-blue-600 text-white"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                }`}
+              >
+                <Wand2 size={18} />
+                <span className="absolute bottom-0.5 right-1 text-[9px] font-mono font-bold opacity-60">
+                  8
                 </span>
               </button>
             </>

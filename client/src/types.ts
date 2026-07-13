@@ -5,7 +5,8 @@ export type Tool =
   | "circle"
   | "line"
   | "hand"
-  | "text";
+  | "text"
+  | "laser";
 
 export interface Point {
   x: number;

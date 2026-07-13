@@ -6,6 +6,13 @@ import { useParams } from "react-router-dom";
 import { socket } from "../socket";
 import toast from "react-hot-toast";
 
+type LaserPoint = {
+  x: number;
+  y: number;
+  time: number; // The exact millisecond this dot was drawn
+  id: string;
+};
+
 export const Canvas: React.FC = () => {
   const lastCursorEmit = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,6 +28,10 @@ export const Canvas: React.FC = () => {
   // --- NEW: Panning State ---
   const [isPanning, setIsPanning] = useState(false);
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
+
+  const laserTrailRef = useRef<LaserPoint[]>([]);
+  const LASER_LIFESPAN = 1000; // How long it takes to vanish (1 second)
+  const ephemeralCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [remoteElements, setRemoteElements] = useState<
     Record<string, CanvasElement>
@@ -82,19 +93,45 @@ export const Canvas: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    socket.on("draw-start", ({ userId, element }) =>
-      setRemoteElements((prev) => ({ ...prev, [userId]: element })),
-    );
-    socket.on("draw-move", ({ userId, element }) =>
-      setRemoteElements((prev) => ({ ...prev, [userId]: element })),
-    );
+    socket.on("draw-start", ({ userId, element }) => {
+      // 1. THE INTERCEPTOR: Route laser straight to the animation loop
+      if (element.type === "laser") {
+        laserTrailRef.current.push({
+          x: element.x,
+          y: element.y,
+          time: Date.now(),
+          id: element.id,
+        });
+        return;
+      }
+      setRemoteElements((prev) => ({ ...prev, [userId]: element }));
+    });
+
+    socket.on("draw-move", ({ userId, element }) => {
+      // 2. THE INTERCEPTOR: Catch moving lasers from other users
+      if (element.type === "laser") {
+        laserTrailRef.current.push({
+          x: element.x,
+          y: element.y,
+          time: Date.now(),
+          id: element.id,
+        });
+        return;
+      }
+      setRemoteElements((prev) => ({ ...prev, [userId]: element }));
+    });
+
     socket.on("draw-end", (element: CanvasElement) => {
       setRemoteElements((prev) => {
         const newState = { ...prev };
         delete newState[element.createdBy!];
         return newState;
       });
-      addRemoteElement(element);
+
+      // 3. THE SHIELD: Do NOT add lasers to the permanent Zustand store
+      if (element.type !== "laser") {
+        addRemoteElement(element);
+      }
     });
     socket.on("cursor-move", ({ userId, x, y, username }) =>
       setCursors((prev) => ({ ...prev, [userId]: { x, y, username } })),
@@ -206,6 +243,66 @@ export const Canvas: React.FC = () => {
     }
   }, [typingState]);
 
+  // --- LASER POINTER ANIMATION LOOP (60FPS) ---
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const renderLaser = () => {
+      const canvas = ephemeralCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const now = Date.now();
+
+      // 1. Wipe ONLY the top layer clean every frame
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 2. Filter out dead points
+      laserTrailRef.current = laserTrailRef.current.filter(
+        (p) => now - p.time < LASER_LIFESPAN,
+      );
+
+      // 3. Draw the fading trail
+      if (laserTrailRef.current.length > 1) {
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = strokeWidth * 2; // Make laser slightly thicker than normal pen
+
+        // Optional: Add glow
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = "rgba(255, 50, 50, 0.8)";
+
+        // Draw segments with fading opacity
+        for (let i = 1; i < laserTrailRef.current.length; i++) {
+          const p1 = laserTrailRef.current[i - 1];
+          const p2 = laserTrailRef.current[i];
+
+          // --- THE FIX ---
+          // If these two points belong to different strokes, do NOT connect them!
+          if (p1.id !== p2.id) continue;
+
+          const age = now - p2.time;
+          const opacity = Math.max(0, 1 - age / LASER_LIFESPAN);
+
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`;
+          ctx.stroke();
+        }
+
+        // Reset shadow so it doesn't leak
+        ctx.shadowBlur = 0;
+      }
+
+      animationFrameId = requestAnimationFrame(renderLaser);
+    };
+
+    renderLaser();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [strokeWidth]);
+
   // --- NEW: Commit Text Logic ---
   const commitText = () => {
     if (!typingState) return;
@@ -287,12 +384,21 @@ export const Canvas: React.FC = () => {
       createdBy: socket.id,
     };
 
+    if (currentTool === "laser") {
+      laserTrailRef.current.push({
+        x,
+        y,
+        time: Date.now(),
+        id: newElement.id,
+      });
+    }
+
     setCurrentElement(newElement);
     socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
   };
 
   const handleMouseMove = (e: React.PointerEvent) => {
-    // Handle Panning
+    // 1. Panning Logic
     if (isPanning) {
       const dx = e.clientX - startPan.x;
       const dy = e.clientY - startPan.y;
@@ -301,18 +407,42 @@ export const Canvas: React.FC = () => {
       return;
     }
 
-    // Get mathematically perfect coordinates for drawing and emitting
     const { x, y } = getCoordinates(e);
 
-    // THE FIX: Throttle the mouse movement emit to every 50ms
-    const now = Date.now();
-    if (now - lastCursorEmit.current > 50) {
-      socket.emit("cursor-move", { roomId: activeRoomId, x, y });
-      lastCursorEmit.current = now;
+    // --- BUG FIX 1: THE GHOST CURSOR SHIELD ---
+    // Only emit cursor movements if you are officially in the room's user list
+    const roomUsers = useBoardStore.getState().roomUsers;
+    const amIInRoom = roomUsers.some((u: any) => u.id === socket.id);
+
+    if (amIInRoom) {
+      const now = Date.now();
+      if (now - lastCursorEmit.current > 50) {
+        socket.emit("cursor-move", { roomId: activeRoomId, x, y });
+        lastCursorEmit.current = now;
+      }
     }
 
     if (!isDrawing || !currentElement) return;
 
+    // --- THE FIX: ISOLATE THE LASER ---
+    if (currentTool === "laser") {
+      laserTrailRef.current.push({
+        x: x,
+        y: y,
+        time: Date.now(),
+        id: currentElement.id,
+      });
+
+      // Emit and instantly RETURN to prevent the double-emit bug
+      socket.emit("draw-move", {
+        roomId: activeRoomId,
+        element: { type: "laser", id: currentElement.id, x: x, y: y },
+      });
+
+      return; // <-- CRITICAL: This stops the rest of the function!
+    }
+
+    // --- STANDARD TOOLS (Pen, Line, Rect, Circle, Eraser) ---
     const updatedElement = { ...currentElement };
 
     if (updatedElement.type === "pen" || updatedElement.type === "eraser") {
@@ -343,11 +473,12 @@ export const Canvas: React.FC = () => {
 
   return (
     <div
-      className="w-full h-full transform-gpu transition-none"
-      style={{
-        transform: `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`,
-        transformOrigin: "0 0",
-      }}
+      className="relative block"
+      style={{ width: canvasSize.width, height: canvasSize.height }}
+      onPointerDown={handleMouseDown}
+      onPointerMove={handleMouseMove}
+      onPointerUp={handleMouseUp}
+      onPointerOut={handleMouseUp}
     >
       {Object.entries(cursors).map(([userId, cursor]) => (
         <div
@@ -377,14 +508,16 @@ export const Canvas: React.FC = () => {
 
       <canvas
         ref={canvasRef}
-        // Change these two lines:
         width={canvasSize.width}
         height={canvasSize.height}
-        onPointerDown={handleMouseDown}
-        onPointerMove={handleMouseMove}
-        onPointerUp={handleMouseUp}
-        onPointerOut={handleMouseUp}
-        className={`${currentTool === "hand" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"} touch-none block`}
+        className="absolute top-0 left-0 pointer-events-none"
+      />
+
+      <canvas
+        ref={ephemeralCanvasRef}
+        width={canvasSize.width}
+        height={canvasSize.height}
+        className="absolute top-0 left-0 pointer-events-none"
       />
 
       {/* --- NEW: THE HTML TEXT OVERLAY --- */}
@@ -424,6 +557,10 @@ export const Canvas: React.FC = () => {
           }}
         />
       )}
+
+      <div
+        className={`absolute top-0 left-0 w-full h-full ${currentTool === "hand" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"} touch-none`}
+      />
     </div>
   );
 };

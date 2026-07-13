@@ -25,6 +25,7 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json());
 app.use((0, cookie_parser_1.default)());
+app.set("trust proxy", 1);
 app.use("/auth", auth_1.authRouter);
 app.use("/boards", boards_1.boardsRouter);
 const server = http_1.default.createServer(app);
@@ -178,6 +179,8 @@ io.on("connection", (socket) => {
     socket.on("draw-move", ({ roomId, element }) => socket.to(roomId).emit("draw-move", { userId: socket.id, element }));
     socket.on("draw-end", async ({ roomId, element }) => {
         socket.to(roomId).emit("draw-end", element);
+        if (element.tool === "laser")
+            return;
         try {
             await models_1.Element.findOneAndUpdate({ id: element.id }, { ...element, boardId: roomId }, { upsert: true });
         }
@@ -209,7 +212,7 @@ io.on("connection", (socket) => {
     socket.on("redo", (roomId) => socket.to(roomId).emit("redo"));
     socket.on("cursor-move", ({ roomId, x, y }) => {
         socket.to(roomId).emit("cursor-move", {
-            userId: socket.data.user.userId,
+            userId: socket.id,
             x,
             y,
             username: socket.data.user?.username,
