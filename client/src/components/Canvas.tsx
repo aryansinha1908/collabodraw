@@ -60,14 +60,14 @@ export const Canvas: React.FC = () => {
   } = useBoardStore();
 
   // --- NEW: Coordinate Math Helper ---
-  // This calculates exact canvas pixels regardless of zoom or pan!
+  // --- BUG FIX: THE WORLD COORDINATE MATH ---
   const getCoordinates = (e: React.PointerEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     return {
-      x: (e.clientX - rect.left) / zoom,
-      y: (e.clientY - rect.top) / zoom,
+      x: (e.clientX - rect.left - offsetX) / zoom,
+      y: (e.clientY - rect.top - offsetY) / zoom,
     };
   };
 
@@ -164,6 +164,11 @@ export const Canvas: React.FC = () => {
     if (!canvas || !ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(zoom, zoom);
+
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -232,6 +237,7 @@ export const Canvas: React.FC = () => {
         });
       }
     });
+    ctx.restore();
     ctx.globalCompositeOperation = "source-over";
   }, [elements, currentElement, remoteElements, canvasSize]);
 
@@ -255,31 +261,29 @@ export const Canvas: React.FC = () => {
 
       const now = Date.now();
 
-      // 1. Wipe ONLY the top layer clean every frame
+      // 1. Wipe the physical screen BEFORE moving the camera
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // 2. Filter out dead points
+      // 2. Filter dead points
       laserTrailRef.current = laserTrailRef.current.filter(
         (p) => now - p.time < LASER_LIFESPAN,
       );
 
-      // 3. Draw the fading trail
       if (laserTrailRef.current.length > 1) {
+        // 3. Move the Laser Camera!
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(zoom, zoom);
+
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = strokeWidth * 2; // Make laser slightly thicker than normal pen
-
-        // Optional: Add glow
+        ctx.lineWidth = strokeWidth * 2;
         ctx.shadowBlur = 8;
         ctx.shadowColor = "rgba(255, 50, 50, 0.8)";
 
-        // Draw segments with fading opacity
         for (let i = 1; i < laserTrailRef.current.length; i++) {
           const p1 = laserTrailRef.current[i - 1];
           const p2 = laserTrailRef.current[i];
-
-          // --- THE FIX ---
-          // If these two points belong to different strokes, do NOT connect them!
           if (p1.id !== p2.id) continue;
 
           const age = now - p2.time;
@@ -292,8 +296,8 @@ export const Canvas: React.FC = () => {
           ctx.stroke();
         }
 
-        // Reset shadow so it doesn't leak
         ctx.shadowBlur = 0;
+        ctx.restore(); // 4. Reset the laser camera!
       }
 
       animationFrameId = requestAnimationFrame(renderLaser);
@@ -484,7 +488,9 @@ export const Canvas: React.FC = () => {
         <div
           key={userId}
           className="absolute pointer-events-none z-50 flex flex-col items-start"
-          style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }}
+          style={{
+            transform: `translate(${offsetX + cursor.x * zoom}px, ${offsetY + cursor.y * zoom}px)`,
+          }}
         >
           <svg
             width="24"
@@ -537,8 +543,10 @@ export const Canvas: React.FC = () => {
           }}
           style={{
             position: "absolute",
-            left: `${typingState.x}px`,
-            top: `${typingState.y}px`,
+            left: `${offsetX + typingState.x * zoom}px`,
+            top: `${offsetY + typingState.y * zoom}px`,
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
             margin: 0,
             padding: 0,
             border: "none",
