@@ -11,6 +11,7 @@ type LaserPoint = {
   y: number;
   time: number; // The exact millisecond this dot was drawn
   id: string;
+  strokeWidth: number;
 };
 
 export const Canvas: React.FC = () => {
@@ -105,6 +106,7 @@ export const Canvas: React.FC = () => {
           y: element.y,
           time: Date.now(),
           id: element.id,
+          strokeWidth: element.strokeWidth || 2,
         });
         return;
       }
@@ -119,6 +121,7 @@ export const Canvas: React.FC = () => {
           y: element.y,
           time: Date.now(),
           id: element.id,
+          strokeWidth: strokeWidth,
         });
         return;
       }
@@ -292,7 +295,6 @@ export const Canvas: React.FC = () => {
 
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = strokeWidth * 2;
         ctx.shadowBlur = 8;
         ctx.shadowColor = "rgba(255, 50, 50, 0.8)";
 
@@ -307,6 +309,7 @@ export const Canvas: React.FC = () => {
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(p2.x, p2.y);
+          ctx.lineWidth = p1.strokeWidth * 2;
           ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`;
           ctx.stroke();
         }
@@ -409,6 +412,7 @@ export const Canvas: React.FC = () => {
         y,
         time: Date.now(),
         id: newElement.id,
+        strokeWidth: strokeWidth,
       });
     }
 
@@ -454,6 +458,7 @@ export const Canvas: React.FC = () => {
         y: y,
         time: Date.now(),
         id: currentElement.id,
+        strokeWidth: strokeWidth,
       });
 
       // Emit and instantly RETURN to prevent the double-emit bug
