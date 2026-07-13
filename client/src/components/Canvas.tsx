@@ -309,7 +309,7 @@ export const Canvas: React.FC = () => {
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
           ctx.lineTo(p2.x, p2.y);
-          ctx.lineWidth = p1.strokeWidth * 2;
+          ctx.lineWidth = (p1.strokeWidth || 2) * 2;
           ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`;
           ctx.stroke();
         }
@@ -458,13 +458,19 @@ export const Canvas: React.FC = () => {
         y: y,
         time: Date.now(),
         id: currentElement.id,
-        strokeWidth: strokeWidth,
+        strokeWidth: currentElement.strokeWidth,
       });
 
       // Emit and instantly RETURN to prevent the double-emit bug
       socket.emit("draw-move", {
         roomId: activeRoomId,
-        element: { type: "laser", id: currentElement.id, x: x, y: y },
+        element: {
+          type: "laser",
+          id: currentElement.id,
+          x: x,
+          y: y,
+          strokeWidth: currentElement.strokeWidth,
+        },
       });
 
       return; // <-- CRITICAL: This stops the rest of the function!
