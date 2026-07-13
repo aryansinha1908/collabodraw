@@ -65,9 +65,13 @@ export const Canvas: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+
+    // --- FIX: Fetch live instantaneous state ---
+    const liveState = useBoardStore.getState();
+
     return {
-      x: (e.clientX - rect.left - offsetX) / zoom,
-      y: (e.clientY - rect.top - offsetY) / zoom,
+      x: (e.clientX - rect.left - liveState.offsetX) / liveState.zoom,
+      y: (e.clientY - rect.top - liveState.offsetY) / liveState.zoom,
     };
   };
 
@@ -239,7 +243,15 @@ export const Canvas: React.FC = () => {
     });
     ctx.restore();
     ctx.globalCompositeOperation = "source-over";
-  }, [elements, currentElement, remoteElements, canvasSize]);
+  }, [
+    elements,
+    currentElement,
+    remoteElements,
+    canvasSize,
+    zoom,
+    offsetX,
+    offsetY,
+  ]);
 
   useEffect(() => {
     if (typingState && textAreaRef.current) {
@@ -270,10 +282,13 @@ export const Canvas: React.FC = () => {
       );
 
       if (laserTrailRef.current.length > 1) {
+        // --- FIX: Fetch live camera state from Zustand ---
+        const liveState = useBoardStore.getState();
+
         // 3. Move the Laser Camera!
         ctx.save();
-        ctx.translate(offsetX, offsetY);
-        ctx.scale(zoom, zoom);
+        ctx.translate(liveState.offsetX, liveState.offsetY);
+        ctx.scale(liveState.zoom, liveState.zoom);
 
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -406,7 +421,11 @@ export const Canvas: React.FC = () => {
     if (isPanning) {
       const dx = e.clientX - startPan.x;
       const dy = e.clientY - startPan.y;
-      setOffset(offsetX + dx, offsetY + dy);
+
+      // --- FIX: Fetch live instantaneous state ---
+      const liveState = useBoardStore.getState();
+
+      setOffset(liveState.offsetX + dx, liveState.offsetY + dy);
       setStartPan({ x: e.clientX, y: e.clientY });
       return;
     }
