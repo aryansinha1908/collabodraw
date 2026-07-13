@@ -232,7 +232,7 @@ io.on("connection", (socket) => {
   );
   socket.on("draw-end", async ({ roomId, element }) => {
     socket.to(roomId).emit("draw-end", element);
-    if (element.tool === "laser") return;
+    if (element.type === "laser") return;
     try {
       await Element.findOneAndUpdate(
         { id: element.id },

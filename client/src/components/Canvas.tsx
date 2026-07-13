@@ -121,7 +121,7 @@ export const Canvas: React.FC = () => {
           y: element.y,
           time: Date.now(),
           id: element.id,
-          strokeWidth: strokeWidth,
+          strokeWidth: element.strokeWidth || 2,
         });
         return;
       }
@@ -469,7 +469,7 @@ export const Canvas: React.FC = () => {
           id: currentElement.id,
           x: x,
           y: y,
-          strokeWidth: currentElement.strokeWidth,
+          strokeWidth: currentElement.strokeWidth || 2,
         },
       });
 
