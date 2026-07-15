@@ -13,7 +13,6 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth_1 = require("./routes/auth");
 const boards_1 = require("./routes/boards");
-const cookie_1 = __importDefault(require("cookie"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const models_1 = require("./models");
 const app = (0, express_1.default)();
@@ -42,20 +41,21 @@ mongoose_1.default
     .catch((err) => console.error("MongoDB connection error:", err));
 const roomUsers = new Map();
 io.use((socket, next) => {
+    // 1. Look for the ticket provided by the frontend
+    const token = socket.handshake.auth.token;
+    if (!token) {
+        return next(new Error("Authentication error: No ticket provided"));
+    }
     try {
-        const rawCookies = socket.handshake.headers.cookie;
-        if (!rawCookies)
-            return next(new Error("Authentication error"));
-        const parsedCookies = cookie_1.default.parseCookie(rawCookies);
-        const token = parsedCookies.draw_token;
-        if (!token)
-            return next(new Error("Authentication error"));
-        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        // 2. Verify the temporary ticket
+        const secret = process.env.JWT_SECRET || "aryansinha1908";
+        const decoded = jsonwebtoken_1.default.verify(token, secret);
+        // 3. Attach the user to the socket session
         socket.data.user = decoded;
         next();
     }
-    catch (err) {
-        next(new Error("Authentication error"));
+    catch (error) {
+        return next(new Error("Authentication error: Invalid or expired ticket"));
     }
 });
 // Upgraded to extract permission states from the socket objects
@@ -179,7 +179,7 @@ io.on("connection", (socket) => {
     socket.on("draw-move", ({ roomId, element }) => socket.to(roomId).emit("draw-move", { userId: socket.id, element }));
     socket.on("draw-end", async ({ roomId, element }) => {
         socket.to(roomId).emit("draw-end", element);
-        if (element.tool === "laser")
+        if (element.type === "laser")
             return;
         try {
             await models_1.Element.findOneAndUpdate({ id: element.id }, { ...element, boardId: roomId }, { upsert: true });
