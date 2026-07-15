@@ -14,7 +14,15 @@ type LaserPoint = {
   strokeWidth: number;
 };
 
-export const Canvas: React.FC = () => {
+interface CanvasProps {
+  isDemo?: boolean;
+  demoCanEdit?: boolean;
+}
+
+export const Canvas: React.FC<CanvasProps> = ({
+  isDemo = false,
+  demoCanEdit = false,
+}) => {
   const lastCursorEmit = useRef<number>(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +106,8 @@ export const Canvas: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (isDemo) return;
+
     socket.on("draw-start", ({ userId, element }) => {
       // 1. THE INTERCEPTOR: Route laser straight to the animation loop
       if (element.type === "laser") {
@@ -347,7 +357,9 @@ export const Canvas: React.FC = () => {
       // 1. Save to local state
       setElements([...elements, newElement], true);
       // 2. Broadcast to everyone else!
-      socket.emit("draw-end", { roomId: activeRoomId, element: newElement });
+      if (!isDemo) {
+        socket.emit("draw-end", { roomId: activeRoomId, element: newElement });
+      }
     }
 
     // Close the box
@@ -366,13 +378,26 @@ export const Canvas: React.FC = () => {
     // --- NEW: Security Check ---
     const roomUsers = useBoardStore.getState().roomUsers;
     const currentUser = roomUsers.find((u: any) => u.id === socket.id);
-    const canIEdit = currentUser?.isOwner || currentUser?.canEdit || false;
+
+    // --- SHIELD: Hybrid Security Check ---
+    let canIEdit = false;
+
+    if (isDemo) {
+      canIEdit = demoCanEdit;
+    } else {
+      canIEdit = currentUser?.isOwner || currentUser?.canEdit || false;
+    }
 
     if (!canIEdit) {
-      toast.error("You are in view-only mode. Ask the owner for edit access.", {
-        id: "view-only-toast",
-      });
-      return; // Instantly block the draw event
+      toast.error(
+        isDemo
+          ? "Switch to Editor Mode to draw!"
+          : "You are in view-only mode. Ask the owner for edit access.",
+        {
+          id: "view-only-toast",
+        },
+      );
+      return;
     }
 
     const { x, y } = getCoordinates(e);
@@ -417,7 +442,9 @@ export const Canvas: React.FC = () => {
     }
 
     setCurrentElement(newElement);
-    socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
+    if (!isDemo) {
+      socket.emit("draw-start", { roomId: activeRoomId, element: newElement });
+    }
   };
 
   const handleMouseMove = (e: React.PointerEvent) => {
@@ -489,7 +516,12 @@ export const Canvas: React.FC = () => {
     }
 
     setCurrentElement(updatedElement);
-    socket.emit("draw-move", { roomId: activeRoomId, element: updatedElement });
+    if (!isDemo) {
+      socket.emit("draw-move", {
+        roomId: activeRoomId,
+        element: updatedElement,
+      });
+    }
   };
 
   const handleMouseUp = () => {
@@ -501,7 +533,12 @@ export const Canvas: React.FC = () => {
     if (!isDrawing || !currentElement) return;
     setIsDrawing(false);
     setElements([...elements, currentElement], true);
-    socket.emit("draw-end", { roomId: activeRoomId, element: currentElement });
+    if (!isDemo) {
+      socket.emit("draw-end", {
+        roomId: activeRoomId,
+        element: currentElement,
+      });
+    }
     setCurrentElement(null);
   };
 
